@@ -26,10 +26,16 @@ The pinned `torch` wheel from PyPI is a CUDA build. A GPU is not required, since
 | Day 2: generate case30 data (about 2 min on 4 cores) | `bash scripts/day2.sh` |
 | Day 3: generate case118 data (about 12 min on 4 cores), test splits | `bash scripts/day3.sh` |
 | Day 4: rule and classic-ML baselines, seed 0 (about 5 min) | `bash scripts/day4.sh` |
+| Day 5: GCN, GraphSAGE, GATv2, seed 0 | `bash scripts/day5.sh` |
+| Day 6: all models, 5 seeds, mean ± std tables | `bash scripts/day6.sh` |
+| Day 7: sanity checks and ablations | `bash scripts/day7.sh` |
+| Everything from scratch | `bash scripts/reproduce.sh` |
+
+Results tables are written to `results/main_table.md` and `results/ablations.md`.
 
 ## Status
 
-Day 4 of 9 done. Results: see the guide, Section 6.
+Day 5 of 9 done. Results: see the guide, Section 6.
 
 ## Tools
 

@@ -2,9 +2,11 @@
 
 Two views of the same sample (operating point `op`, outaged branch `cont`):
 - graph: PyG Data. Nodes = buses, edges = in-service branches (both directions).
-  The outaged branch is removed, and its two end buses get a flag.
+  The outaged branch is removed; its two end buses get a flag, the equivalent
+  power injection, and the branch's pre-outage loading.
 - flat: one fixed-length vector for the classic baselines: all node features,
-  all pre-outage branch features, and a one-hot of the outaged branch.
+  all pre-outage branch features, a one-hot of the outaged branch, and the
+  outaged branch's pre-outage flow and loading (same information as the graph).
 
 Feature scaling is fitted on training samples only.
 """
@@ -16,6 +18,8 @@ import torch
 from torch_geometric.data import Data
 
 from pgs import config
+
+OUTAGE_NODE_FEATURES = ["outage_end", "outage_p_inj", "outage_loading"]
 
 
 def load_grid(grid, data_dir=config.DATA_DIR):
@@ -39,15 +43,29 @@ class Scaler:
         return (x - self.mean) / self.std
 
 
+def outage_descriptor(arrays, df):
+    """Pre-outage active flow and loading of the branch that trips, per sample."""
+    eb = arrays["edge_base"][df.op.to_numpy(), df.cont.to_numpy()]
+    return (eb[:, config.EDGE_BASE_FEATURES.index("p_from_base")],
+            eb[:, config.EDGE_BASE_FEATURES.index("loading_base")])
+
+
 def node_inputs(arrays, df):
-    """Per-sample node features: pre-outage bus features + outage-endpoint flag."""
+    """Per-sample node features: pre-outage bus features + OUTAGE_NODE_FEATURES.
+
+    Removing a branch that carried P from bus f to bus t acts like injecting +P at f
+    and -P at t into the remaining grid (the compensation method behind outage
+    distribution factors). Its pre-outage loading is given at both ends.
+    """
     ei = arrays["edge_index"]
     x = arrays["node_x"][df.op.to_numpy()]
-    flag = np.zeros(x.shape[:2] + (1,))
-    rows = np.arange(len(df))
-    flag[rows, ei[0, df.cont], 0] = 1
-    flag[rows, ei[1, df.cont], 0] = 1
-    return np.concatenate([x, flag], axis=-1)
+    extra = np.zeros(x.shape[:2] + (len(OUTAGE_NODE_FEATURES),))
+    rows, f, t = np.arange(len(df)), ei[0, df.cont], ei[1, df.cont]
+    p, loading = outage_descriptor(arrays, df)
+    extra[rows, f, 0] = extra[rows, t, 0] = 1
+    extra[rows, f, 1], extra[rows, t, 1] = p, -p
+    extra[rows, f, 2] = extra[rows, t, 2] = loading
+    return np.concatenate([x, extra], axis=-1)
 
 
 def edge_inputs(arrays, df):
@@ -58,11 +76,13 @@ def edge_inputs(arrays, df):
 
 
 def flat_features(arrays, df):
+    """All bus and branch features, one-hot of the outage, and the outage descriptor."""
     n_br = arrays["edge_index"].shape[1]
     x = arrays["node_x"][df.op.to_numpy()].reshape(len(df), -1)
     e = arrays["edge_base"][df.op.to_numpy()].reshape(len(df), -1)
     onehot = np.eye(n_br)[df.cont.to_numpy()]
-    return np.concatenate([x, e, onehot], axis=1)
+    p, loading = outage_descriptor(arrays, df)
+    return np.concatenate([x, e, onehot, p[:, None], loading[:, None]], axis=1)
 
 
 def graph_dataset(arrays, df, train_idx):

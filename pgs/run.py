@@ -40,8 +40,8 @@ def rule_scores(name, df, split):
         return df.cont.map(rate).fillna(tr.insecure.mean()).to_numpy()
     if name == "base_loading":  # worst pre-outage branch loading
         return df.base_max_loading.to_numpy()
-    if name == "dc_rule":  # worst post-outage DC branch loading
-        return df.dc_max_loading.fillna(np.inf).to_numpy()
+    if name == "dc_rule":  # worst post-outage DC branch loading; a failed DC solve = alarm
+        return df.dc_max_loading.fillna(1e6).to_numpy()
     raise ValueError(name)
 
 
@@ -58,7 +58,7 @@ def _scores(model, loader):
     return torch.cat(out).numpy()
 
 
-def fit_torch(model, train_loader, val_loader, y_val, pos_weight, max_epochs=100, patience=10):
+def fit_torch(model, train_loader, val_loader, y_val, pos_weight, max_epochs=60, patience=8):
     model.to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight, device=DEVICE))
@@ -137,7 +137,8 @@ def run(grid, split_kind, model_name, seed, df, arrays, graphs=None, opts=None):
                                    generator=torch.Generator().manual_seed(seed))
         loader = lambda idx: GraphLoader([graphs[i] for i in idx], batch_size=512)
         model = GNN(model_name, graphs[0].x.shape[1], graphs[0].edge_attr.shape[1],
-                    layers=opts.get("layers", 3), use_edges=not opts.get("no_edge_feats"))
+                    layers=opts.get("layers", 3), use_edges=not opts.get("no_edge_feats"),
+                    no_topology=opts.get("no_topology", False))
         extra["epochs"] = fit_torch(model, train_loader, loader(va), y_fit[va], pos_weight)
         extra["n_params"] = sum(p.numel() for p in model.parameters())
         s_val = _scores(model, loader(va))
@@ -169,12 +170,14 @@ def main():
     ap.add_argument("--tag", default="", help="suffix for ablation runs")
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--no-edge-feats", action="store_true")
+    ap.add_argument("--no-topology", action="store_true")
     ap.add_argument("--shuffle-labels", action="store_true")
     a = ap.parse_args()
     models = []
     for m in a.models.split(","):
         models += RULES if m == "rules" else [m]
-    opts = dict(layers=a.layers, no_edge_feats=a.no_edge_feats, shuffle_labels=a.shuffle_labels)
+    opts = dict(layers=a.layers, no_edge_feats=a.no_edge_feats, no_topology=a.no_topology,
+                shuffle_labels=a.shuffle_labels)
 
     df, arrays = load_grid(a.grid)
     out_dir = os.path.join(config.RESULTS_DIR, "runs")

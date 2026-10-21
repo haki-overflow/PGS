@@ -23,12 +23,15 @@ class GNN(nn.Module):
 
     GCN and GraphSAGE see bus features and topology only. GATv2 also reads branch
     features (impedance, rating, pre-outage loading and flow) in its attention.
+    no_topology=True drops every edge (ablation): buses then never exchange messages.
     """
 
-    def __init__(self, conv, d_node, d_edge, hidden=64, layers=3, dropout=0.1, use_edges=True):
+    def __init__(self, conv, d_node, d_edge, hidden=64, layers=3, dropout=0.1, use_edges=True,
+                 no_topology=False):
         super().__init__()
         self.conv_type = conv
-        self.use_edges = use_edges and conv == "gat"
+        self.no_topology = no_topology
+        self.use_edges = use_edges and conv == "gat" and not no_topology
         self.enc = nn.Linear(d_node, hidden)
         self.convs = nn.ModuleList()
         for _ in range(layers):
@@ -47,11 +50,12 @@ class GNN(nn.Module):
 
     def forward(self, data):
         h = torch.relu(self.enc(data.x))
+        edge_index = data.edge_index[:, :0] if self.no_topology else data.edge_index
         for conv, norm in zip(self.convs, self.norms):
             if self.use_edges:
-                m = conv(h, data.edge_index, data.edge_attr)
+                m = conv(h, edge_index, data.edge_attr)
             else:
-                m = conv(h, data.edge_index)
+                m = conv(h, edge_index)
             h = norm(h + self.drop(torch.relu(m)))
         g = torch.cat([global_mean_pool(h, data.batch), global_max_pool(h, data.batch)], dim=-1)
         return self.head(g).squeeze(-1)

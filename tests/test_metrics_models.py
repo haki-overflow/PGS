@@ -45,3 +45,16 @@ def test_models_return_one_logit_per_sample():
     batch = Batch.from_data_list([g, g, g])
     for conv in ("gcn", "sage", "gat"):
         assert GNN(conv, 11, 7)(batch).shape == (3,)
+
+
+def test_no_topology_ablation_ignores_edges():
+    torch.manual_seed(0)
+    x = torch.randn(4, 11)
+    a = Data(x=x, edge_index=torch.tensor([[0, 1], [1, 2]]), edge_attr=torch.randn(2, 7))
+    b = Data(x=x, edge_index=torch.tensor([[3, 0, 2], [0, 2, 1]]), edge_attr=torch.randn(3, 7))
+    for conv in ("gcn", "sage", "gat"):
+        with_edges = GNN(conv, 11, 7).eval()
+        no_topo = GNN(conv, 11, 7, no_topology=True).eval()
+        out = lambda m, d: m(Batch.from_data_list([d]))
+        assert not torch.allclose(out(with_edges, a), out(with_edges, b))
+        assert torch.allclose(out(no_topo, a), out(no_topo, b))

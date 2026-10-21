@@ -3,7 +3,8 @@ import pandas as pd
 import pytest
 
 from pgs import config
-from pgs.dataset import Scaler, flat_features, graph_dataset, node_inputs
+from pgs.dataset import (OUTAGE_NODE_FEATURES, Scaler, flat_features, graph_dataset,
+                         node_inputs)
 from pgs.splits import make_split
 
 N_OPS, N_BUS = 20, 4
@@ -50,11 +51,17 @@ def test_splits_differ_by_seed(toy):
     assert set(make_split(df, "op", 0)["test"]) != set(make_split(df, "op", 1)["test"])
 
 
-def test_outage_flag_marks_both_end_buses(toy):
+def test_outage_features_mark_both_end_buses(toy):
     df, arrays = toy
     x = node_inputs(arrays, df)
     row = df.index[(df.cont == 4)][0]  # branch 4 joins buses 0 and 2
-    assert x[row, :, -1].tolist() == [1, 0, 1, 0]
+    op = df.op[row]
+    p = arrays["edge_base"][op, 4, config.EDGE_BASE_FEATURES.index("p_from_base")]
+    loading = arrays["edge_base"][op, 4, config.EDGE_BASE_FEATURES.index("loading_base")]
+    k = len(config.NODE_FEATURES)
+    assert x[row, :, k].tolist() == [1, 0, 1, 0]                      # outage end flag
+    assert np.allclose(x[row, :, k + 1], [p, 0, -p, 0])               # +P at from, -P at to
+    assert np.allclose(x[row, :, k + 2], [loading, 0, loading, 0])    # pre-outage loading
 
 
 def test_graph_removes_outaged_branch_and_keeps_both_directions(toy):
@@ -64,7 +71,7 @@ def test_graph_removes_outaged_branch_and_keeps_both_directions(toy):
     pairs = set(map(tuple, g.edge_index.T.tolist()))
     assert (0, 2) not in pairs and (2, 0) not in pairs
     assert g.edge_index.shape[1] == 2 * (EDGES.shape[1] - 1)
-    assert g.x.shape == (N_BUS, len(config.NODE_FEATURES) + 1)
+    assert g.x.shape == (N_BUS, len(config.NODE_FEATURES) + len(OUTAGE_NODE_FEATURES))
 
 
 def test_reverse_edge_flips_active_power(toy):
@@ -95,4 +102,4 @@ def test_flat_features_shape(toy):
     f = flat_features(arrays, df)
     n_br = EDGES.shape[1]
     assert f.shape == (len(df), N_BUS * len(config.NODE_FEATURES)
-                       + n_br * len(config.EDGE_BASE_FEATURES) + n_br)
+                       + n_br * len(config.EDGE_BASE_FEATURES) + n_br + 2)
