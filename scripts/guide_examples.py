@@ -54,6 +54,20 @@ def main():
     print(f"  neighbours 1 and 3 mean: {mean.round(3).tolist()}")
     print(f"  new bus 2 = ReLU(1.0*self + 0.5*mean) = {new.round(3).tolist()}")
 
+    print("\nExample 3: metrics on 10 samples, 2 of them insecure")
+    from pgs.metrics import evaluate
+    y = np.array([1, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+    score = np.array([0.9, 0.8, 0.3, 0.2, 0.1, 0.1, 0.05, 0.05, 0.0, 0.0])
+    always_secure = evaluate(y, np.zeros(10), np.inf)
+    print(f"  'always secure': accuracy {always_secure['accuracy']:.2f}, "
+          f"recall {always_secure['recall']:.2f}")
+    for thr in (0.5, 0.25):
+        m = evaluate(y, score, thr)
+        print(f"  model, threshold {thr}: precision {m['precision']:.2f}, recall "
+              f"{m['recall']:.2f}, F1 {m['f1']:.2f}, accuracy {m['accuracy']:.2f}")
+    print(f"  model PR-AUC (all thresholds): {evaluate(y, score, 0.5)['pr_auc']:.3f}; "
+          f"random scores would give about {y.mean():.1f}")
+
 
 if __name__ == "__main__":
     main()

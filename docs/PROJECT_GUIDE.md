@@ -56,6 +56,18 @@ Each term has a one-line analogy.
 | **Graph** | Nodes joined by edges. Here, nodes = buses and edges = in-service branches. | A metro map: stations and tracks. |
 | **One-hot vector** | A list of zeros with a single 1 marking which item is meant (e.g. which branch is out). | A row of light switches with exactly one on. |
 | **Standardising (scaling)** | Shifting and stretching each feature so it has mean 0 and spread 1, using training data only. | Converting all prices to the same currency before comparing. |
+| **Baseline** | A simpler method a fancy model must beat to be worth using. | Before buying a GPS, check whether a paper map already gets you there. |
+| **Rule-based baseline** | A hand-written rule with no learning, e.g. "insecure if DC loading > threshold". | A rule of thumb. |
+| **Logistic regression (LR)** | A weighted sum of features pushed through an S-curve to give a probability. Straight-line decision boundary. | A checklist where each item has points and you add them up. |
+| **Gradient boosting (LightGBM)** | Hundreds of small decision trees, each one fixing the mistakes of the ones before it. Strong on tables of numbers. | A committee where each new member focuses on the cases the others got wrong. |
+| **MLP (multi-layer perceptron)** | A basic neural network: layers of weighted sums with nonlinear "bends" between them. | Many stacked checklists, where each feeds the next. |
+| **Score and threshold** | Models output a score. We call a sample insecure if score ≥ threshold. | A fever thermometer and the "38 °C = fever" cut-off. |
+| **Precision** | Of the samples we flagged insecure, the share that really were. | Of the alarms that rang, how many were real fires. |
+| **Recall** | Of the truly insecure samples, the share we caught. **The most important number here: a missed insecure case is the dangerous error.** | Of the real fires, how many set off the alarm. |
+| **F1** | A single number that balances precision and recall (their harmonic mean). | A grade that is only high if both scores are high. |
+| **PR-AUC (average precision)** | Precision averaged over every possible threshold. 1.0 = perfect. **Random guessing scores the base rate** (≈ 0.09-0.12 here), not 0.5. | Grading the alarm at every sensitivity setting, not just one. |
+| **Base rate** | The share of insecure samples in a set. | How common fires are in the first place. |
+| **Shuffled-label check** | Train on randomly shuffled labels. A sound pipeline must then score at chance. If it scores well, something leaks. | Giving a student a random answer key. If they still "pass", the exam is broken. |
 
 More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we use them.
 
@@ -90,6 +102,22 @@ More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we 
 - **Built the flat view for classic models.** All bus features, all branch features, and a one-hot vector saying which branch is out, joined into one long list (case30: 425 numbers; case118: 1,738). *Why:* logistic regression, gradient boosting and MLPs need a fixed-length input.
 - **Scaling uses training data only.** *Why:* computing the mean and spread over all data would leak a little information about the test set into training.
 - **Tests (16)** check that splits never share an operating point (S1) or an outage (S2), that the outaged branch is really removed, that reversed edges flip the sign of power flow, and that the scaler only sees training rows.
+
+### Day 4: baselines
+
+- **Four rules with no real learning** (`pgs/run.py`). *Why:* they show how much of the problem is trivial.
+  - `majority`: always says secure.
+  - `cont_prior`: "how often was this outage insecure in training?" It memorises dangerous outages and nothing else.
+  - `base_loading`: the worst branch loading *before* the outage.
+  - `dc_rule`: the worst branch loading *after* the outage, from a fast DC power flow.
+- **Three classic ML models on the flat view:** logistic regression, LightGBM and an MLP. *Why:* a GNN must beat ordinary ML, not just rules.
+- **Every model's threshold is tuned on validation** (maximise F1). The test set is used once, for reporting (D16).
+- **Metrics focus on the insecure class:** PR-AUC, recall, precision and F1. *Why:* with 9-12% insecure, "always secure" gets 88-91% accuracy and catches nothing.
+- **Leakage check on a suspicious number.** LightGBM scored 0.995 PR-AUC on case30 S1, which is too good to trust without checking. Two checks:
+  1. **Shuffled labels:** LightGBM then scores 0.120 PR-AUC, close to the 0.112 base rate. So the pipeline does not leak labels.
+  2. **Feature importance:** the model leans mostly on *which outage* it is (4 outages carry 52% of importance), then on load at bus 7 and pre-outage voltages. That matches the physics. A few outages are dangerous, and how dangerous depends on how stressed the grid is.
+
+  Conclusion: S1 is genuinely easy, not leaky. S2 is the real test.
 
 ---
 
@@ -133,6 +161,20 @@ Each bus has two features: [voltage, load]. Bus 2 = [0.95, 0.4]. Its neighbours 
 2. **Combine:** new bus 2 = ReLU(1.0 × own + 0.5 × neighbour mean) = ReLU([0.95 + 0.4875, 0.4 + 0.1]) = **[1.438, 0.5]**.
 
 In a real GNN, the weights 1.0 and 0.5 are learned matrices, not fixed numbers. After 2 such steps, each bus "knows" about buses 2 hops away.
+
+### Example 3: why accuracy misleads, and what PR-AUC measures
+
+Ten samples, 2 insecure (base rate 0.2). Model scores: 0.9, 0.8, 0.3, 0.2, 0.1, 0.1, 0.05, 0.05, 0, 0. The truly insecure samples are the 1st (0.9) and 3rd (0.3).
+
+| Method | Precision | Recall | F1 | Accuracy |
+|---|---|---|---|---|
+| "Always secure" | (none flagged) | 0.00 | 0.00 | **0.80** |
+| Model, threshold 0.5 | 0.50 | 0.50 | 0.50 | 0.80 |
+| Model, threshold 0.25 | 0.67 | 1.00 | 0.80 | 0.90 |
+
+- "Always secure" has 80% accuracy and catches **zero** insecure cases.
+- Lowering the threshold from 0.5 to 0.25 catches both insecure cases at the cost of one false alarm. That is the right trade for safety.
+- The model's **PR-AUC is 0.833**, scored over all thresholds. Random scores would give about **0.2** (the base rate), not 0.5.
 
 ---
 
@@ -225,6 +267,29 @@ Split sizes (seed 0) and insecure rate of the **test** set across the 5 seeds:
 - S2 test sets are small. One case30 seed has only about 6 insecure test samples, so S2 scores will swing a lot between seeds. That is why we run 5 seeds and report ± spread.
 - S2 also uses less data for training (only 60% of outages × 70% of points).
 
+### Day 4: baselines, seed 0 only (container run, CPU, 21/10)
+
+Test set. PR-AUC / recall / F1 for the insecure class. **One seed only:** treat as a first look, not a result. The 5-seed table comes on Day 6.
+
+| Model | case30 S1 | case30 S2 | case118 S1 | case118 S2 |
+|---|---|---|---|---|
+| Base rate (= random PR-AUC) | 0.112 | 0.105 | 0.086 | 0.116 |
+| majority | 0.112 / 0.00 / 0.00 | 0.105 / 0.00 / 0.00 | 0.086 / 0.00 / 0.00 | 0.116 / 0.00 / 0.00 |
+| cont_prior | 0.784 / 0.97 / 0.67 | 0.105 / 1.00 / 0.19 | 0.798 / 0.66 / 0.74 | 0.116 / 1.00 / 0.21 |
+| base_loading | 0.186 / 0.46 / 0.29 | 0.143 / 0.33 / 0.20 | 0.143 / 0.23 / 0.20 | 0.233 / 0.28 / 0.29 |
+| dc_rule | 0.452 / 0.58 / 0.55 | **0.968 / 0.82 / 0.86** | 0.272 / 0.35 / 0.28 | **0.391 / 0.45 / 0.39** |
+| LR | 0.952 / 0.91 / 0.87 | 0.141 / 0.55 / 0.23 | 0.834 / 0.65 / 0.70 | 0.240 / 0.17 / 0.23 |
+| LightGBM | **0.995 / 0.98 / 0.98** | 0.136 / 0.58 / 0.22 | 0.929 / 0.78 / 0.84 | 0.224 / 0.00 / 0.00 |
+| MLP | 0.977 / 0.93 / 0.91 | 0.155 / 0.49 / 0.22 | **0.933 / 0.77 / 0.84** | 0.275 / 0.17 / 0.23 |
+
+Shuffled-label check (case30 S1, LightGBM): PR-AUC 0.120 vs base rate 0.112, so no leakage detected.
+
+**What this means:**
+- **S1 (known outages) is easy.** Just memorising dangerous outages (`cont_prior`) gets ~0.8. LightGBM and MLP add load-level awareness and reach 0.93-0.995.
+- **S2 (unseen outages) breaks every flat model.** They score near the base rate. *Why:* the outage is a one-hot column the model never saw switched on in training, so it has nothing to go on. This is the gap a GNN might close, because a GNN sees *where* in the grid the outage is.
+- **The DC rule is erratic.** It is strong on case30 S2 seed 0 (0.968) but weak on S1 (0.452). It ignores voltage, and about two-thirds of case30's insecure samples have voltage violations. It looks good only when the held-out outages happen to be overload-driven. Five seeds will show how much this moves.
+- **LightGBM on case118 S2 has recall 0:** the threshold tuned on validation did not transfer to the new outages in the test set. Threshold transfer is part of the generalisation problem.
+
 ---
 
 ## 7. Limitations: what we can NOT claim
@@ -256,6 +321,9 @@ Split sizes (seed 0) and insecure rate of the **test** set across the 5 seeds:
    - A shuffled-label run must score at chance.
 10. **Why not a random train/test split?** Each operating point appears with ~38-177 different outages. A random split would put the same operating point on both sides, and the model could recognise it instead of learning the physics.
 11. **How do you represent the outage for the GNN?** I delete that branch from the graph and set a flag on its two end buses, so the model sees both the new topology and where the change happened.
+12. **Why PR-AUC and not accuracy or ROC-AUC?** Only about 10% of samples are insecure. Accuracy rewards saying "secure" every time. ROC-AUC can look high even when most alarms are false. PR-AUC focuses on the rare class, and its chance level is the base rate, which I always report next to it.
+13. **One model scored 0.995. Wasn't that leakage?** I treated it as leakage until checked. Shuffled labels gave chance level (0.120 vs 0.112), and feature importance pointed to physically sensible features. The task on known outages is just easy. That is why I also test on unseen outages.
+14. **Why do classic models fail on unseen outages?** They see the outage as a one-hot column. If that column was never 1 in training, the model learned nothing about it. A graph model instead sees the outage as a change in a structure it knows.
 
 ---
 
