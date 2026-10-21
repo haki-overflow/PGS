@@ -1,0 +1,14 @@
+# Tested on Python 3.13 (Linux). Python 3.11+ should work.
+numpy==2.4.6
+scipy==1.18.1
+pandas==2.3.3
+pyarrow==26.0.0
+networkx==3.7
+pandapower==3.5.6
+numba==0.68.0
+llvmlite==0.50.0
+scikit-learn==1.9.1
+lightgbm==4.7.0
+torch==2.14.1
+torch-geometric==2.8.1
+pytest==9.1.1
