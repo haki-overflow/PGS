@@ -24,10 +24,11 @@ The pinned `torch` wheel from PyPI is a CUDA build. A GPU is not required, since
 |---|---|
 | Day 1: inspect grids, test label logic | `bash scripts/day1.sh` |
 | Day 2: generate case30 data (about 2 min on 4 cores) | `bash scripts/day2.sh` |
+| Day 3: generate case118 data (about 12 min on 4 cores), test splits | `bash scripts/day3.sh` |
 
 ## Status
 
-Day 2 of 9 done. Results: see the guide, Section 6.
+Day 3 of 9 done. Results: see the guide, Section 6.
 
 ## Tools
 
