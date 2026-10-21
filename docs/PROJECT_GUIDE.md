@@ -359,6 +359,9 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 - **Non-convergence ≠ collapse.** The solver can fail for numerical reasons. In practice it never happened (0 of 32,640 samples), so our "insecure" label is entirely voltage and overload violations.
 - **Small S2 test sets.** Unseen-outage results rest on 360 (case30) or 648 (case118) test samples per seed, with 21-63 insecure ones. Wide error bars are expected.
 - **Load factor range is effectively 0.7-1.1.** Points with higher load were already insecure before any outage, so they were discarded (D7). The model has not seen heavier loading.
+- **Thresholds do not transfer to unseen outages.** On S2, recall at the validation-tuned threshold was 0.00-0.43 even when PR-AUC was good. Any deployment would need its threshold set for the desired recall.
+- **The S2 split was changed after looking at one test fold's contents** (D20). The change was model-agnostic and logged, but it is still a protocol change made after seeing early results.
+- **No speed claim.** GNN inference was fast (under 0.1 ms per sample, batched, CPU), but we did not benchmark it against an optimised power-flow solver.
 
 ---
 
@@ -382,6 +385,10 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 12. **Why PR-AUC and not accuracy or ROC-AUC?** Only about 10% of samples are insecure. Accuracy rewards saying "secure" every time. ROC-AUC can look high even when most alarms are false. PR-AUC focuses on the rare class, and its chance level is the base rate, which I always report next to it.
 13. **One model scored 0.995-0.997. Wasn't that leakage?** I treated it as leakage until checked. Shuffled labels gave chance level (0.106-0.120 vs a 0.112 base rate), and feature importance pointed to physically sensible features. The task on known outages is just easy. That is why I also test on unseen outages.
 14. **Why do classic models fail on unseen outages?** They see the outage as a one-hot column. If that column was never 1 in training, the model learned nothing about it. A graph model instead sees the outage as a change in a structure it knows.
+15. **Why can a GNN handle an outage it never saw?** Weight sharing. The same message function runs at every bus and every branch. What it learns about how power reroutes around a missing branch in one part of the grid applies anywhere else. A flat model has separate weights for each input column, so nothing transfers.
+16. **Did the GNN beat the baselines?** *(Seed 0 so far; the 5-seed answer comes on Day 6.)* Only where it should: on unseen outages in the 118-bus grid, it led on both held-out outage folds (PR-AUC 0.40-0.47 vs at most 0.27 on test). On known outages it matched LightGBM (0.99 vs 0.997 on case30) but did not beat it. On the small 30-bus grid, results flipped between folds, because each fold has only 7-8 outages.
+17. **Why did you change your test split halfway?** I looked at what one test fold contained and saw that only 1 of its 7 outages was ever insecure, so the score measured one outage. I switched to 5 rotating, balanced outage folds, so every outage is tested exactly once, and re-ran every model. I logged the change and the reason (decision D20). The change was the same for all models.
+18. **Your recall on unseen outages is low. Is the model useless there?** The ranking is useful (PR-AUC is 3-5× the base rate on case118), but the threshold tuned on validation outages does not transfer well to new outages. In screening, you would pick a lower threshold and accept more false alarms, because missing an insecure case is the expensive error.
 
 ---
 
