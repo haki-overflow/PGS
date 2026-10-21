@@ -46,6 +46,21 @@ def test_cont_split_shares_no_outage_and_no_operating_point(toy, seed):
         assert not sets["val"] & sets["test"], col
 
 
+def test_cont_split_tests_every_outage_exactly_once_over_five_seeds(toy):
+    df, _ = toy
+    tested = np.concatenate([np.unique(df.cont.iloc[make_split(df, "cont", s)["test"]])
+                             for s in range(5)])
+    assert sorted(tested.tolist()) == sorted(np.unique(df.cont).tolist())
+
+
+def test_outage_folds_spread_the_most_dangerous_outages():
+    from pgs.splits import outage_folds
+    rows = [(o, c, c < 5) for o in range(4) for c in range(25)]  # outages 0-4 always insecure
+    df = pd.DataFrame(rows, columns=["op", "cont", "insecure"])
+    folds = outage_folds(df)
+    assert [len(set(f) & set(range(5))) for f in folds] == [1, 1, 1, 1, 1]
+
+
 def test_splits_differ_by_seed(toy):
     df, _ = toy
     assert set(make_split(df, "op", 0)["test"]) != set(make_split(df, "op", 1)["test"])
