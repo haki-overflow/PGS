@@ -325,9 +325,9 @@ Same format and test sets as the Day 4 table (PR-AUC / recall / F1).
 |---|---|---|---|---|
 | Base rate | 0.112 | 0.167 | 0.086 | 0.097 |
 | Best baseline (from Day 4) | LightGBM 0.997 | LR 0.842 | LightGBM 0.962 | DC rule 0.274 |
-| GCN | 0.989 / 0.97 / 0.94 | 0.246 / 0.27 / 0.26 | CASE118_S1_GCN | 0.402 / 0.43 / 0.45 |
-| GraphSAGE | 0.989 / 0.94 / 0.95 | 0.179 / 0.10 / 0.09 | CASE118_S1_SAGE | **0.468** / 0.18 / 0.26 |
-| GATv2 | 0.994 / 0.98 / 0.95 | 0.160 / 0.00 / 0.00 | CASE118_S1_GAT | 0.406 / 0.25 / 0.30 |
+| GCN | 0.989 / 0.97 / 0.94 | 0.246 / 0.27 / 0.26 | 0.947 / 0.80 / 0.85 | 0.402 / 0.43 / 0.45 |
+| GraphSAGE | 0.989 / 0.94 / 0.95 | 0.179 / 0.10 / 0.09 | 0.950 / 0.75 / 0.85 | **0.468** / 0.18 / 0.26 |
+| GATv2 | 0.994 / 0.98 / 0.95 | 0.160 / 0.00 / 0.00 | (running) | 0.406 / 0.25 / 0.30 |
 
 Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 (outage fold 1, never used for training, but used for early stopping, so slightly optimistic for the neural models):
 

@@ -32,6 +32,7 @@ The pinned `torch` wheel from PyPI is a CUDA build. A GPU is not required, since
 | Everything from scratch | `bash scripts/reproduce.sh` |
 
 Results tables are written to `results/main_table.md` and `results/ablations.md`.
+Reference output for each day's command: [`docs/EXPECTED_OUTPUT.md`](docs/EXPECTED_OUTPUT.md).
 
 ## Status
 
