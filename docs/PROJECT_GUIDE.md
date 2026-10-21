@@ -75,11 +75,11 @@ Each term has a one-line analogy.
 | **GAT / GATv2 (attention)** | Learns *how much* to listen to each neighbour. Our GATv2 also reads branch features (impedance, rating, pre-outage flow) when deciding. | Listening more to the neighbour on the busiest road. |
 | **Pooling (readout)** | Turns all node vectors into one vector for the whole graph. We use mean + max. Max matters because one overloaded spot makes the whole sample insecure. | Summarising a city by its average traffic and its worst jam. |
 | **Epoch** | One full pass over the training data. | Reading the whole textbook once. |
-| **Early stopping** | Stop training when the validation score has not improved for 10 epochs, and keep the best version. Prevents memorising the training set (overfitting). | Stop studying when mock-exam scores stop rising. |
+| **Early stopping** | Stop training when the validation score has not improved for 8 epochs, and keep the best version. Prevents memorising the training set (overfitting). | Stop studying when mock-exam scores stop rising. |
 | **Seed** | The number that fixes all randomness (split, initial weights, batch order). Different seeds = different, equally valid runs. | Shuffling a deck with a recorded shuffle. |
 | **Mean ± std over seeds** | Average over 5 seeds, ± their standard deviation. It shows how much a result depends on luck. | Five test attempts: your average and how much it varies. |
 
-More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we use them.
+More terms are added on the day we first use them.
 
 ---
 
@@ -108,7 +108,7 @@ More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we 
 - **Built two leakage-safe splits** (`pgs/splits.py`). *Why:* a random split per sample would put the *same operating point* in both train and test, just with a different outage. The model could then recognise the operating point instead of learning physics.
   - **S1 "unseen operating points":** operating points are divided 70/15/15. No point appears in two sets, but every outage appears everywhere.
   - **S2 "unseen outages":** operating points are divided 70/15/15 *and* outages 60/20/20. Test samples combine new operating points with outages the model has *never* seen. This is the harder and more interesting test.
-- **Built the graph view of each sample** (`pgs/dataset.py`). Buses are nodes with 10 pre-outage features, plus a flag that is 1 on the two buses at the ends of the outaged branch. In-service branches are edges in both directions. The outaged branch is **removed**. *Why:* the GNN should "see" the hole in the grid.
+- **Built the graph view of each sample** (`pgs/dataset.py`). Buses are nodes with 10 pre-outage features, plus a flag that is 1 on the two buses at the ends of the outaged branch (from Day 5 also the tripped branch's flow and loading on those two buses, D17). In-service branches are edges in both directions. The outaged branch is **removed**. *Why:* the GNN should "see" the hole in the grid.
 - **Built the flat view for classic models.** All bus features, all branch features, a one-hot vector saying which branch is out, and (from Day 5) the outaged branch's pre-outage flow and loading, joined into one long list (case30: 425 numbers; case118: 1,740). *Why:* logistic regression, gradient boosting and MLPs need a fixed-length input.
 - **Scaling uses training data only.** *Why:* computing the mean and spread over all data would leak a little information about the test set into training.
 - **Tests (16)** check that splits never share an operating point (S1) or an outage (S2), that the outaged branch is really removed, that reversed edges flip the sign of power flow, and that the scaler only sees training rows.
@@ -123,7 +123,7 @@ More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we 
 - **Three classic ML models on the flat view:** logistic regression, LightGBM and an MLP. *Why:* a GNN must beat ordinary ML, not just rules.
 - **Every model's threshold is tuned on validation** (maximise F1). The test set is used once, for reporting (D16).
 - **Metrics focus on the insecure class:** PR-AUC, recall, precision and F1. *Why:* with 9-12% insecure, "always secure" gets 88-91% accuracy and catches nothing.
-- **Leakage check on a suspicious number.** LightGBM scored 0.995 PR-AUC on case30 S1, which is too good to trust without checking. Two checks:
+- **Leakage check on a suspicious number.** LightGBM scored 0.995 PR-AUC on case30 S1 (0.997 in the re-run after D17), which is too good to trust without checking. Two checks:
   1. **Shuffled labels:** LightGBM then scores 0.120 PR-AUC (0.106 in the re-run after D17), close to the 0.112 base rate. So the pipeline does not leak labels.
   2. **Feature importance:** the model leans mostly on *which outage* it is (4 outages carry 52% of importance), then on load at bus 7 and pre-outage voltages. That matches the physics. A few outages are dangerous, and how dangerous depends on how stressed the grid is.
 
@@ -333,9 +333,9 @@ Shuffled-label check (case30 S1, LightGBM): PR-AUC **0.106** vs base rate 0.112 
 2. **Why IEEE test grids and not real data?** Real grid models are confidential. IEEE cases are the standard public benchmarks, so results are comparable and reproducible.
 3. **Where do your line ratings come from?** case30 has real ratings in its file. case118's file has none (9900 MVA placeholders), so I set each rating to 1.1 × the worst flow the branch sees across all N-1 outages at nominal load. That makes the nominal grid N-1 secure, as a planned grid would be.
 4. **Why drop islanding outages?** After islanding, part of the grid has no generator to balance it, so power flow is not defined in the same way. That is a different problem. I count them and exclude them.
-5. **Why is non-convergence labelled insecure?** In practice an operator cannot trust that state. But it can also be a numerical failure, so I retry from 3 starting points and report the rate. On case30 it never happened.
+5. **Why is non-convergence labelled insecure?** In practice an operator cannot trust that state. But it can also be a numerical failure, so I retry from 3 starting points and report the rate. It never happened on either grid (0 of 32,640 samples).
 6. **How did you generate scenarios?** I scaled all loads by a random factor from 0.7 to 1.3 with per-bus noise, redispatched generators proportionally, kept only points that are secure before the outage, then ran every single-branch outage with AC power flow.
-7. **What is your class balance?** On case30, 12.1% insecure out of 11,400 samples. So I report recall, F1 and PR-AUC on the insecure class, not accuracy.
+7. **What is your class balance?** 12.1% insecure on case30 (11,400 samples) and 9.1% on case118 (21,240 samples). So I report recall, F1 and PR-AUC on the insecure class, not accuracy.
 8. **How do you know the pipeline is reproducible?** Seeds are fixed, versions are pinned, and a test runs generation twice with different numbers of parallel workers and checks that the label hash is identical.
 9. **How did you prevent data leakage?**
    - Inputs contain only pre-outage quantities, and a test checks the input file's contents.
@@ -343,7 +343,7 @@ Shuffled-label check (case30 S1, LightGBM): PR-AUC **0.106** vs base rate 0.112 
    - Scaling statistics and decision thresholds come from training and validation data only.
    - A shuffled-label run must score at chance.
 10. **Why not a random train/test split?** Each operating point appears with ~38-177 different outages. A random split would put the same operating point on both sides, and the model could recognise it instead of learning the physics.
-11. **How do you represent the outage for the GNN?** I delete that branch from the graph and set a flag on its two end buses, so the model sees both the new topology and where the change happened.
+11. **How do you represent the outage for the GNN?** I delete that branch from the graph. On its two end buses I add a flag, the branch's pre-outage loading, and an "equivalent injection": +P at one end and −P at the other, where P was its pre-outage flow. That is the compensation idea from power-system analysis, since tripping a branch acts like injecting its old flow into the remaining grid. So the model sees the new topology, where the change is, and how much power must reroute.
 12. **Why PR-AUC and not accuracy or ROC-AUC?** Only about 10% of samples are insecure. Accuracy rewards saying "secure" every time. ROC-AUC can look high even when most alarms are false. PR-AUC focuses on the rare class, and its chance level is the base rate, which I always report next to it.
 13. **One model scored 0.995-0.997. Wasn't that leakage?** I treated it as leakage until checked. Shuffled labels gave chance level (0.106-0.120 vs a 0.112 base rate), and feature importance pointed to physically sensible features. The task on known outages is just easy. That is why I also test on unseen outages.
 14. **Why do classic models fail on unseen outages?** They see the outage as a one-hot column. If that column was never 1 in training, the model learned nothing about it. A graph model instead sees the outage as a change in a structure it knows.
