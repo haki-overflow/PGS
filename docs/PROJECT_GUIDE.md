@@ -45,6 +45,10 @@ Each term has a one-line analogy.
 | **IEEE test case** | Standard, public, made-up grids (14, 30, 39, 118 buses) used by researchers. Not real grids. | A standard driving-test course. |
 | **MATPOWER** | A popular power-system tool whose case files pandapower loads. | The source of the test courses. |
 | **pandapower** | Python library that runs power flow. | Our traffic simulator. |
+| **Synthetic data** | Data we generate from a simulator instead of measuring it. | Practice exam questions you write yourself. |
+| **Load factor** | How much all loads are scaled versus the case file (0.8 = 80% of nominal demand). | "Rush hour is 1.3, night is 0.7." |
+| **Class imbalance** | One label is much rarer than the other (here insecure ≈ 12%). A model can score 88% accuracy by always saying "secure". | A smoke alarm that never rings is "right" most days. |
+| **Reactive power (MVAr)** | Power that sloshes back and forth to keep voltages up. It does no useful work but still uses line capacity. | Foam on a beer: takes up glass space, isn't beer. |
 
 More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we use them.
 
@@ -59,6 +63,15 @@ More terms (GNN, message passing, PR-AUC, leakage, ...) are added on the day we 
 - **Found that case14 and case118 have no real ratings.** Every branch says 9900 MVA, which MATPOWER uses to mean "no limit". Without a fix, "overload" could never happen on them. We chose a planning-style synthetic rating (decision D3).
 - **Found that case39 is unusable with our label.** One generator holds its voltage at 1.064 p.u., above our 1.06 limit, so every sample would be "insecure". We dropped it (D5).
 - **Wrote the label code and 7 tests** (`pgs/grid.py`, `tests/test_grid.py`). The tests check, on a hand-built 3-bus grid, that overloads, low voltages and solver failures are all labelled insecure, and that islanding outages are detected. *Why:* if the label is wrong, every result after it is wrong.
+
+### Day 2: generate the case30 dataset
+
+- **Sampled random operating points** (`pgs/generate.py`). Each one scales all loads by a global factor drawn uniformly from 0.7 to 1.3, then by a per-bus random factor (about ±7%). Generators are redispatched in proportion, with ±10% noise. *Why:* real grids never sit at one fixed load. We need variety so the model learns patterns, not one snapshot.
+- **Kept only operating points that are secure before any outage** (D7). Only 38% of random points passed, mostly the lower-load ones, because case30's default point already overloads a line.
+- **For each kept point, ran all 38 non-islanding outages** with full AC power flow, labelling each one. That gives 300 × 38 = 11,400 samples. *Why:* this is exactly the N-1 check an operator runs.
+- **Also stored a DC power-flow estimate** for every outage, used only by a rule baseline later, never as a model input. *Why:* "a cheap physics approximation" is the fair baseline a GNN must beat.
+- **Stored inputs and labels in separate files.** Inputs (`arrays.npz`) hold only pre-outage quantities. Post-outage results (`samples.parquet`) hold the label and diagnostics. A test checks that the input file has no extra keys. *Why:* this is the main protection against data leakage (defined on Day 3).
+- **Checked determinism.** A test runs generation twice with different worker counts and compares a hash of the labels. *Why:* "reproducible" must be checked, not just claimed.
 
 ---
 
@@ -117,6 +130,10 @@ In a real GNN, the weights 1.0 and 0.5 are learned matrices, not fixed numbers. 
 | D6 | **Islanding outages are excluded** (3 in case30, 9 in case118) and counted. | After islanding, part of the grid has no slack bus. That is a different problem (loss of load), not a power-flow limit check. | Label them all insecure (trivially predictable). |
 | D7 | **Only operating points that are secure before the outage are kept.** | The question is "does this outage break a currently secure grid?". | Keep all (then many labels are just "already broken"). |
 | D8 | **Python dict configs instead of YAML files.** | Fewer moving parts for a 9-day project. | YAML files plus a loader. |
+| D9 | **Scenario sampling:** global load factor ~ U(0.7, 1.3) × per-bus N(1, 0.07). Reactive load scales with active load. Generator P is set proportional to total load × U(0.9, 1.1), clipped to its limits, and the slack covers the rest. Seed 0. | Simple, standard and documented. It covers light to heavy load. | Real load profiles (rejected: mapping them onto IEEE buses is arbitrary); optimal power flow dispatch (slower, more complex). |
+| D10 | **Sample counts:** case30 has 300 operating points × 38 outages. case118 has 120 × 177. | Enough samples for a stable 5-seed comparison, while generation stays at minutes. | More points with fewer outages per point. |
+| D11 | **Node features (10 per bus):** load P/Q, generator P/Q, voltage setpoint, bus type (slack/PV/PQ), pre-outage voltage magnitude and angle. **Branch features:** r, x, b, rating, is-transformer (fixed), plus pre-outage loading and active flow. All in p.u. on 100 MVA. | Everything an operator knows *before* the outage. Pre-outage power-flow results are legitimate inputs because operators already have them. | Raw inputs only (no pre-outage PF), which would be harder for every model. |
+| D12 | **Generator outages are not included.** | First on the cut list. Branch outages already give the core problem. | Add the 53 case118 generator outages. |
 
 ---
 
@@ -137,6 +154,28 @@ From `python -m pgs.inspect_cases`. Ratings use D3 where the file has none. Max 
 
 **What this means:** case30's default point overloads a line, so its usable operating points will come from lower loads. That is fine, because we keep only secure points (D7).
 
+### Day 2: case30 dataset (container run, 21/10, label hash `42676ea248`)
+
+| Quantity | Value |
+|---|---|
+| Candidate operating points tried | 785 |
+| Secure before outage (kept) | 38.2%, first 300 kept |
+| Outages per point | 38 (3 islanding outages excluded) |
+| Samples | 11,400 |
+| **Insecure** | **12.1%** |
+| ... because of overload | 6.4% |
+| ... because of voltage outside [0.94, 1.06] | 8.0% (a sample can have both) |
+| Non-converged | 0 |
+| Load factor of kept points | 0.70 to 1.07 (median 0.82) |
+| Insecure rate per operating point | 2.6% to 47.4% (median 10.5%) |
+| Outages insecure at *every* point / at *no* point | 1 / 12 |
+
+**What this means:**
+- The data is imbalanced (12% insecure), so accuracy alone would mislead.
+- 12 of 38 outages are never insecure and 1 is always insecure. A model can get part of the way just by memorising "which outage is dangerous". We will add a baseline that does exactly that, so a GNN is not credited for it.
+- Non-convergence never happened on case30, so the "with/without non-converged" ablation means nothing here.
+- The DC estimate of loading read about 0.70 where AC read 0.98 on one point. DC ignores reactive power, so a DC rule needs a threshold tuned on training data, not a fixed 1.0.
+
 ---
 
 ## 7. Limitations: what we can NOT claim
@@ -155,7 +194,10 @@ From `python -m pgs.inspect_cases`. Ratings use D3 where the file has none. Max 
 2. **Why IEEE test grids and not real data?** Real grid models are confidential. IEEE cases are the standard public benchmarks, so results are comparable and reproducible.
 3. **Where do your line ratings come from?** case30 has real ratings in its file. case118's file has none (9900 MVA placeholders), so I set each rating to 1.1 × the worst flow the branch sees across all N-1 outages at nominal load. That makes the nominal grid N-1 secure, as a planned grid would be.
 4. **Why drop islanding outages?** After islanding, part of the grid has no generator to balance it, so power flow is not defined in the same way. That is a different problem. I count them and exclude them.
-5. **Why is non-convergence labelled insecure?** In practice an operator cannot trust that state. But it can also be a numerical failure, so I retry from 3 starting points and report the rate.
+5. **Why is non-convergence labelled insecure?** In practice an operator cannot trust that state. But it can also be a numerical failure, so I retry from 3 starting points and report the rate. On case30 it never happened.
+6. **How did you generate scenarios?** I scaled all loads by a random factor from 0.7 to 1.3 with per-bus noise, redispatched generators proportionally, kept only points that are secure before the outage, then ran every single-branch outage with AC power flow.
+7. **What is your class balance?** On case30, 12.1% insecure out of 11,400 samples. So I report recall, F1 and PR-AUC on the insecure class, not accuracy.
+8. **How do you know the pipeline is reproducible?** Seeds are fixed, versions are pinned, and a test runs generation twice with different numbers of parallel workers and checks that the label hash is identical.
 
 ---
 
