@@ -293,29 +293,60 @@ S2 test folds contain 2-5 outages that are ever insecure on case30 (21-60 insecu
 - The first version of S2 (random 60/20/20 per seed) was worse. In case30 seed 0, only 1 of the 7 test outages was ever insecure, and all 33 insecure test samples came from it. Another seed had only 1.9% insecure test samples. D20 fixed that.
 - S2 also uses less data for training (only 60% of outages × 70% of points).
 
-### Day 4: baselines, seed 0 only (container run, CPU, 22/10; re-run after D17)
+### Day 4: baselines, seed 0 only (container run, CPU, 22/10; re-run after D17 and D20)
 
-Test set. PR-AUC / recall / F1 for the insecure class. **One seed only:** treat as a first look, not a result. The 5-seed table comes on Day 6. These are the re-run numbers *with* the outage descriptor (D17). The first run without it had flat models near the base rate on S2 (e.g. LightGBM case30 S2: 0.136).
+Test set. PR-AUC / recall / F1 for the insecure class. **One seed only:** treat as a first look, not a result. The 5-seed table comes on Day 6. These numbers use the outage descriptor (D17) and, for S2, the rotating outage folds (D20). Seed 0 tests outage fold 0.
 
 | Model | case30 S1 | case30 S2 | case118 S1 | case118 S2 |
 |---|---|---|---|---|
-| Base rate (= random PR-AUC) | 0.112 | 0.105 | 0.086 | 0.116 |
-| majority | 0.112 / 0.00 / 0.00 | 0.105 / 0.00 / 0.00 | 0.086 / 0.00 / 0.00 | 0.116 / 0.00 / 0.00 |
-| cont_prior | 0.784 / 0.97 / 0.67 | 0.105 / 1.00 / 0.19 | 0.798 / 0.66 / 0.74 | 0.116 / 1.00 / 0.21 |
-| base_loading | 0.186 / 0.46 / 0.29 | 0.143 / 0.33 / 0.20 | 0.143 / 0.23 / 0.20 | 0.233 / 0.28 / 0.29 |
-| dc_rule | 0.452 / 0.58 / 0.55 | **0.968 / 0.82 / 0.86** | 0.272 / 0.35 / 0.28 | **0.391 / 0.45 / 0.39** |
-| LR | 0.967 / 0.91 / 0.90 | 0.129 / 0.00 / 0.00 | 0.883 / 0.76 / 0.77 | 0.232 / 0.37 / 0.28 |
-| LightGBM | **0.997 / 0.96 / 0.97** | 0.566 / 0.58 / 0.35 | **0.962 / 0.84 / 0.88** | 0.290 / 0.37 / 0.33 |
-| MLP | 0.983 / 0.96 / 0.91 | 0.136 / 0.00 / 0.00 | 0.942 / 0.79 / 0.84 | 0.316 / 0.39 / 0.39 |
+| Base rate (= random PR-AUC) | 0.112 | 0.167 | 0.086 | 0.097 |
+| majority | 0.112 / 0.00 / 0.00 | 0.167 / 0.00 / 0.00 | 0.086 / 0.00 / 0.00 | 0.097 / 0.00 / 0.00 |
+| cont_prior | 0.784 / 0.97 / 0.67 | 0.167 / 1.00 / 0.29 | 0.798 / 0.66 / 0.74 | 0.097 / 1.00 / 0.18 |
+| base_loading | 0.186 / 0.46 / 0.29 | 0.219 / 0.37 / 0.30 | 0.143 / 0.23 / 0.20 | 0.150 / 0.21 / 0.19 |
+| dc_rule | 0.452 / 0.58 / 0.55 | 0.738 / 0.60 / 0.66 | 0.272 / 0.35 / 0.28 | **0.274** / 0.32 / 0.27 |
+| LR | 0.967 / 0.91 / 0.90 | **0.842 / 0.78 / 0.64** | 0.883 / 0.76 / 0.77 | 0.270 / 0.41 / 0.35 |
+| LightGBM | **0.997 / 0.96 / 0.97** | 0.248 / 0.35 / 0.26 | **0.962 / 0.84 / 0.88** | 0.244 / 0.18 / 0.24 |
+| MLP | 0.983 / 0.96 / 0.91 | 0.224 / 0.42 / 0.31 | 0.942 / 0.79 / 0.84 | 0.232 / 0.35 / 0.31 |
 
 Shuffled-label check (case30 S1, LightGBM): PR-AUC **0.106** vs base rate 0.112 (the first run, before D17, gave 0.120). So no leakage detected.
 
 **What this means:**
 - **S1 (known outages) is easy.** Just memorising dangerous outages (`cont_prior`) gets ~0.8. LightGBM and MLP add load-level awareness and reach 0.94-0.997.
-- **S2 (unseen outages) is hard for every flat model.** The best flat model reaches 0.57 on case30 and 0.32 on case118, against base rates of 0.11-0.12. *Why:* the outage is a one-hot column the model never saw switched on in training. Only the two descriptor numbers (tripped flow and loading) carry over to new outages. A GNN, in contrast, sees *where* in the grid the outage is.
-- **The outage descriptor helped flat models too:** LightGBM on case30 S2 went from 0.136 to 0.566. Giving every model the same information was the right call.
-- **The DC rule is erratic.** It is strong on case30 S2 seed 0 (0.968) but weak on S1 (0.452). It ignores voltage, and about two-thirds of case30's insecure samples have voltage violations. It looks good only when the held-out outages happen to be overload-driven. Five seeds will show how much this moves.
-- **Recall 0 for LR and MLP on case30 S2:** the threshold tuned on validation outages did not transfer to the different test outages. Threshold transfer is part of the generalisation problem.
+- **S2 (unseen outages) is hard for flat models,** especially on case118, where the best baseline reaches only 0.27 against a 0.10 base rate. *Why:* the outage is a one-hot column the model never saw switched on in training. Only the two descriptor numbers (tripped flow and loading) carry over to new outages.
+- **One fold of case30 is not a verdict.** Logistic regression scores 0.842 on the case30 test fold but only 0.376 on its validation fold (a different set of 8 outages). With 7-8 outages per fold, each score mostly reflects *which* outages are held out. Only the 5-fold average on Day 6 can be trusted.
+- **The outage descriptor helped flat models** (old S2 split, seed 0: LightGBM case30 went from 0.136 to 0.566 PR-AUC when D17 was added). Giving every model the same information was the right call.
+- **The DC rule ignores voltage.** About two-thirds of case30's insecure samples have voltage violations, which DC cannot see. That is why it is weak on S1 (0.452).
+
+### Day 5: GNNs, seed 0 only (container run, CPU, 22/10)
+
+Same format and test sets as the Day 4 table (PR-AUC / recall / F1).
+
+| Model | case30 S1 | case30 S2 | case118 S1 | case118 S2 |
+|---|---|---|---|---|
+| Base rate | 0.112 | 0.167 | 0.086 | 0.097 |
+| Best baseline (from Day 4) | LightGBM 0.997 | LR 0.842 | LightGBM 0.962 | DC rule 0.274 |
+| GCN | 0.989 / 0.97 / 0.94 | 0.246 / 0.27 / 0.26 | CASE118_S1_GCN | 0.402 / 0.43 / 0.45 |
+| GraphSAGE | 0.989 / 0.94 / 0.95 | 0.179 / 0.10 / 0.09 | CASE118_S1_SAGE | **0.468** / 0.18 / 0.26 |
+| GATv2 | 0.994 / 0.98 / 0.95 | 0.160 / 0.00 / 0.00 | CASE118_S1_GAT | 0.406 / 0.25 / 0.30 |
+
+Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 (outage fold 1, never used for training, but used for early stopping, so slightly optimistic for the neural models):
+
+| Model | case30 S2 val (base 0.183) | case118 S2 val (base 0.074) |
+|---|---|---|
+| DC rule | 0.587 | 0.180 |
+| LR | 0.376 | 0.205 |
+| LightGBM | 0.430 | 0.236 |
+| MLP | 0.325 | 0.168 |
+| GCN | **0.896** | 0.542 |
+| GraphSAGE | 0.685 | **0.584** |
+| GATv2 | 0.822 | 0.577 |
+
+**What this means:**
+- **Known outages (S1): GNNs match the best flat model (0.989-0.994 vs 0.997 on case30) but do not beat it.** When every outage has been seen in training, a graph is not needed.
+- **Unseen outages on case118 (S2): the GNNs are the best models on both held-out folds.** On test they score 0.40-0.47 vs at most 0.27 for any baseline, and on validation 0.54-0.58 vs at most 0.24. This is the result the project was designed to test, but it is **one seed**. Day 6 decides.
+- **Unseen outages on case30 flip between folds.** The GNNs are near chance on the test fold but the best models on the validation fold (GCN 0.896). Logistic regression does the opposite. With 7-8 outages per fold, case30 S2 is too small to judge from one fold.
+- **Recall at the chosen threshold is low on S2** (0.10-0.43). PR-AUC says the *ranking* of risky cases is useful, but the threshold picked on validation outages does not transfer well to new outages. For screening, you would lower the threshold to raise recall and accept more false alarms.
+- **Speed (indicative only):** GCN predicted the 1,710 case30 S1 test samples in 0.15 s on CPU, under 0.1 ms per sample. One pandapower AC power flow took about 43 ms here. That is not a fair engineering benchmark (batched neural network vs one unoptimised solver call), so we do not claim a speed-up figure.
 
 ---
 
