@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Day 7: sanity checks and ablations on case118, both splits, 5 seeds.
+# Step 7: sanity checks and ablations on case118, both splits, 5 seeds.
 # The GNN to ablate is picked by validation PR-AUC on S2, never by test results.
 set -euo pipefail
 BEST=$(python -m pgs.aggregate --best-gnn case118)

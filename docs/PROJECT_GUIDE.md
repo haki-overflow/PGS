@@ -47,7 +47,7 @@ Each term has a one-line analogy.
 | **pandapower** | Python library that runs power flow. | Our traffic simulator. |
 | **Synthetic data** | Data we generate from a simulator instead of measuring it. | Practice exam questions you write yourself. |
 | **Load factor** | How much all loads are scaled versus the case file (0.8 = 80% of nominal demand). | "Rush hour is 1.3, night is 0.7." |
-| **Class imbalance** | One label is much rarer than the other (here insecure ≈ 12%). A model can score 88% accuracy by always saying "secure". | A smoke alarm that never rings is "right" most days. |
+| **Class imbalance** | One label is much rarer than the other (here insecure ≈ 12%). A model can score 88% accuracy by always saying "secure". | A smoke alarm that never rings is "right" most steps. |
 | **Reactive power (MVAr)** | Power that sloshes back and forth to keep voltages up. It does no useful work but still uses line capacity. | Foam on a beer: takes up glass space, isn't beer. |
 | **Feature** | One input number the model sees (e.g. the load at bus 7). | One clue a detective gets. |
 | **Label** | The answer the model must predict (secure = 0, insecure = 1). | The solution at the back of the book. |
@@ -79,13 +79,13 @@ Each term has a one-line analogy.
 | **Seed** | The number that fixes all randomness (split, initial weights, batch order). Different seeds = different, equally valid runs. | Shuffling a deck with a recorded shuffle. |
 | **Mean ± std over seeds** | Average over 5 seeds, ± their standard deviation. It shows how much a result depends on luck. | Five test attempts: your average and how much it varies. |
 
-More terms are added on the day we first use them.
+More terms are added at the step where we first use them.
 
 ---
 
-## 3. What we did, day by day, and WHY
+## 3. What we did, step by step, and WHY
 
-### Day 1: inspect the grids, lock the label
+### Step 1: inspect the grids, lock the label
 
 - **Set up a pinned environment.** Every library version is fixed in `requirements.txt`. *Why:* pandapower's case files and PyTorch Geometric change between versions, and results must be reproducible.
 - **Inspected the four candidate grids** (`python -m pgs.inspect_cases`). We looked at size, whether the branch ratings in the file are real, which outages island the grid, and whether the default operating point is already within limits. *Why:* a label is only meaningful if the limits it checks are meaningful.
@@ -93,27 +93,27 @@ More terms are added on the day we first use them.
 - **Found that case39 is unusable with our label.** One generator holds its voltage at 1.064 p.u., above our 1.06 limit, so every sample would be "insecure". We dropped it (D5).
 - **Wrote the label code and 7 tests** (`pgs/grid.py`, `tests/test_grid.py`). The tests check, on a hand-built 3-bus grid, that overloads, low voltages and solver failures are all labelled insecure, and that islanding outages are detected. *Why:* if the label is wrong, every result after it is wrong.
 
-### Day 2: generate the case30 dataset
+### Step 2: generate the case30 dataset
 
 - **Sampled random operating points** (`pgs/generate.py`). Each one scales all loads by a global factor drawn uniformly from 0.7 to 1.3, then by a per-bus random factor (about ±7%). Generators are redispatched in proportion, with ±10% noise. *Why:* real grids never sit at one fixed load. We need variety so the model learns patterns, not one snapshot.
 - **Kept only operating points that are secure before any outage** (D7). Only 38% of random points passed, mostly the lower-load ones, because case30's default point already overloads a line.
 - **For each kept point, ran all 38 non-islanding outages** with full AC power flow, labelling each one. That gives 300 × 38 = 11,400 samples. *Why:* this is exactly the N-1 check an operator runs.
 - **Also stored a DC power-flow estimate** for every outage, used only by a rule baseline later, never as a model input. *Why:* "a cheap physics approximation" is the fair baseline a GNN must beat.
-- **Stored inputs and labels in separate files.** Inputs (`arrays.npz`) hold only pre-outage quantities. Post-outage results (`samples.parquet`) hold the label and diagnostics. A test checks that the input file has no extra keys. *Why:* this is the main protection against data leakage (defined on Day 3).
+- **Stored inputs and labels in separate files.** Inputs (`arrays.npz`) hold only pre-outage quantities. Post-outage results (`samples.parquet`) hold the label and diagnostics. A test checks that the input file has no extra keys. *Why:* this is the main protection against data leakage (defined on Step 3).
 - **Checked determinism.** A test runs generation twice with different worker counts and compares a hash of the labels. *Why:* "reproducible" must be checked, not just claimed.
 
-### Day 3: case118 data, splits, graphs
+### Step 3: case118 data, splits, graphs
 
 - **Generated the case118 dataset:** 120 operating points × 177 outages = 21,240 samples. *Why:* case30 is small. A GNN's advantage, if any, should show on the bigger grid.
 - **Built two leakage-safe splits** (`pgs/splits.py`). *Why:* a random split per sample would put the *same operating point* in both train and test, just with a different outage. The model could then recognise the operating point instead of learning physics.
   - **S1 "unseen operating points":** operating points are divided 70/15/15. No point appears in two sets, but every outage appears everywhere.
-  - **S2 "unseen outages":** operating points are divided 70/15/15 *and* outages are dealt into 5 folds. Seed *s* tests on fold *s*, validates on fold *s*+1 and trains on the other 3 (so 60/20/20). Over the 5 seeds every outage is tested exactly once. Test samples combine new operating points with outages the model has *never* seen. This is the harder and more interesting test. (Changed on Day 5, see D20.)
-- **Built the graph view of each sample** (`pgs/dataset.py`). Buses are nodes with 10 pre-outage features, plus a flag that is 1 on the two buses at the ends of the outaged branch (from Day 5 also the tripped branch's flow and loading on those two buses, D17). In-service branches are edges in both directions. The outaged branch is **removed**. *Why:* the GNN should "see" the hole in the grid.
-- **Built the flat view for classic models.** All bus features, all branch features, a one-hot vector saying which branch is out, and (from Day 5) the outaged branch's pre-outage flow and loading, joined into one long list (case30: 425 numbers; case118: 1,740). *Why:* logistic regression, gradient boosting and MLPs need a fixed-length input.
+  - **S2 "unseen outages":** operating points are divided 70/15/15 *and* outages are dealt into 5 folds. Seed *s* tests on fold *s*, validates on fold *s*+1 and trains on the other 3 (so 60/20/20). Over the 5 seeds every outage is tested exactly once. Test samples combine new operating points with outages the model has *never* seen. This is the harder and more interesting test. (Changed on Step 5, see D20.)
+- **Built the graph view of each sample** (`pgs/dataset.py`). Buses are nodes with 10 pre-outage features, plus a flag that is 1 on the two buses at the ends of the outaged branch (from Step 5 also the tripped branch's flow and loading on those two buses, D17). In-service branches are edges in both directions. The outaged branch is **removed**. *Why:* the GNN should "see" the hole in the grid.
+- **Built the flat view for classic models.** All bus features, all branch features, a one-hot vector saying which branch is out, and (from Step 5) the outaged branch's pre-outage flow and loading, joined into one long list (case30: 425 numbers; case118: 1,740). *Why:* logistic regression, gradient boosting and MLPs need a fixed-length input.
 - **Scaling uses training data only.** *Why:* computing the mean and spread over all data would leak a little information about the test set into training.
 - **Tests (16)** check that splits never share an operating point (S1) or an outage (S2), that the outaged branch is really removed, that reversed edges flip the sign of power flow, and that the scaler only sees training rows.
 
-### Day 4: baselines
+### Step 4: baselines
 
 - **Four rules with no real learning** (`pgs/run.py`). *Why:* they show how much of the problem is trivial.
   - `majority`: always says secure.
@@ -129,12 +129,12 @@ More terms are added on the day we first use them.
 
   Conclusion: S1 is genuinely easy, not leaky. S2 is the real test.
 
-### Day 5: graph neural networks
+### Step 5: graph neural networks
 
 - **Fixed a design flaw before training any GNN.** Removing the tripped branch from the graph also removed its pre-outage flow, which is the power that must reroute. We now put that information on the branch's two end buses as an "equivalent injection" (+P at one end, −P at the other), using the compensation idea from power-system textbooks (D17). The flat models get the same numbers, and all baselines were re-run. *Why:* a fair comparison needs every model to have the same information.
 - **Built three GNNs with one shared skeleton** (`pgs/models.py`, D19). GCN and GraphSAGE see bus features and topology. GATv2 additionally reads branch features (impedance, rating, pre-outage flow) when deciding how much to listen to each neighbour. *Why:* these are the three standard GNN families. Same skeleton = fair comparison between them.
 - **Trained with class-weighted loss and early stopping on validation PR-AUC** (D18). *Why:* the weighting stops the model ignoring the rare insecure class. Early stopping stops it memorising the training set.
-- **Seed 0 only, as a working check.** The 5-seed comparison is Day 6.
+- **Seed 0 only, as a working check.** The 5-seed comparison is Step 6.
 
 ---
 
@@ -201,7 +201,7 @@ Ten samples, 2 insecure (base rate 0.2). Model scores: 0.9, 0.8, 0.3, 0.2, 0.1, 
 
 | # | Decision | Why | Alternatives considered |
 |---|---|---|---|
-| D1 | **Label:** a (operating point, single-branch outage) pair is **insecure** if the post-outage AC power flow (with generator reactive limits enforced) has any bus voltage outside [0.94, 1.06] p.u., OR any branch loading above 100%, OR fails to converge after 3 attempts (warm start from the pre-outage solution, flat start, DC start). Otherwise **secure**. | Standard static-security criteria. Agreed with the user on Day 0. | Using each case file's own voltage limits (they differ per case, e.g. case30 uses 0.95-1.05); treating non-convergence as a separate class. |
+| D1 | **Label:** a (operating point, single-branch outage) pair is **insecure** if the post-outage AC power flow (with generator reactive limits enforced) has any bus voltage outside [0.94, 1.06] p.u., OR any branch loading above 100%, OR fails to converge after 3 attempts (warm start from the pre-outage solution, flat start, DC start). Otherwise **secure**. | Standard static-security criteria. Agreed with the user on Step 0. | Using each case file's own voltage limits (they differ per case, e.g. case30 uses 0.95-1.05); treating non-convergence as a separate class. |
 | D2 | **Loading = apparent power (MVA) at the worse end of the branch / rating (MVA).** | MATPOWER ratings are in MVA. pandapower's own `loading_percent` is current-based, which reads higher when voltage is low (case30 line 5-7: 112% current-based vs 109% MVA-based at the default point). | pandapower's current-based loading. |
 | D3 | **Synthetic ratings for branches without a real one:** rating = 1.1 × the largest flow that branch carries over the nominal case and every non-islanding N-1 outage. | Mimics planning: the nominal grid is N-1 secure by construction, and insecurity appears as load and generation move. A simpler rule (1.2-1.5 × base flow with a median floor) gave 36-61% insecure outages even at nominal load, which mostly reflected an arbitrary margin. | Fixed multiple of base flow; leaving ratings unlimited (then only voltage could fail). |
 | D4 | **Grids:** case30 (real ratings, small, main debugging grid) and case118 (synthetic ratings, main large grid). case14 is for debugging only. | case30 is the only small case here with real ratings. case118 is where a GNN should matter. | IEEE-30 original (`case_ieee30`, no real ratings). |
@@ -215,18 +215,18 @@ Ten samples, 2 insecure (base rate 0.2). Model scores: 0.9, 0.8, 0.3, 0.2, 0.1, 
 | D12 | **Generator outages are not included.** | First on the cut list. Branch outages already give the core problem. | Add the 53 case118 generator outages. |
 | D13 | **Two splits.** S1: operating points 70/15/15. S2: operating points 70/15/15 × outages 60/20/20 (5 rotating outage folds since D20). The operating-point split is redrawn for each seed. | S1 checks "new conditions, known outages". S2 checks "new conditions, new outages", which is where a graph model should help. Redrawing per seed puts split luck into the ± numbers. | Random split per sample (leaks); one fixed split (hides variance); keeping operating points shared in S2 (larger test set, but the model would have seen the test operating point). |
 | D14 | **Outage = remove the branch from the graph + flag its two end buses.** | The model sees the changed topology directly, and the flag tells it *where* the change is. | Keep the edge with an "out" feature (GCN/SAGE cannot read edge features). |
-| D15 | **GCN and GraphSAGE use bus features and topology only. GATv2 also reads branch features** (r, x, b, rating, pre-outage loading and flow). | These are the standard forms of each layer. | Give all three edge features. Not possible for plain GCN without changing what "GCN" means. A Day 7 ablation turns GAT's edge features off to measure their effect. |
+| D15 | **GCN and GraphSAGE use bus features and topology only. GATv2 also reads branch features** (r, x, b, rating, pre-outage loading and flow). | These are the standard forms of each layer. | Give all three edge features. Not possible for plain GCN without changing what "GCN" means. A Step 7 ablation turns GAT's edge features off to measure their effect. |
 | D16 | **Decision threshold is tuned on validation for every model** (maximise F1), including the rules. | Fair: no model gets a hand-picked threshold. The test set is never used to choose anything. | Fixed 0.5 (unfair to rules and to imbalanced models). |
-| D17 | **Outage descriptor features (added on Day 5, before any GNN result existed).** The two end buses of the tripped branch get: a flag, an "equivalent injection" (+P at the sending end, −P at the receiving end, where P is the branch's pre-outage active flow), and the branch's pre-outage loading. Flat models get the same two numbers (P and loading) as extra columns. All baselines were re-run afterwards. | Removing the branch from the graph also removed its pre-outage flow, the power that must reroute and the most important single number. Physics gives a clean fix (the compensation method behind outage distribution factors): tripping a branch that carried P is equivalent to injecting +P and −P at its ends into the remaining grid. Giving the flat models the same numbers keeps the comparison fair. | Keep the branch in the graph with an "out" marker (GCN/SAGE can't read edge features); give only the flag (loses the key quantity). |
+| D17 | **Outage descriptor features (added on Step 5, before any GNN result existed).** The two end buses of the tripped branch get: a flag, an "equivalent injection" (+P at the sending end, −P at the receiving end, where P is the branch's pre-outage active flow), and the branch's pre-outage loading. Flat models get the same two numbers (P and loading) as extra columns. All baselines were re-run afterwards. | Removing the branch from the graph also removed its pre-outage flow, the power that must reroute and the most important single number. Physics gives a clean fix (the compensation method behind outage distribution factors): tripping a branch that carried P is equivalent to injecting +P and −P at its ends into the remaining grid. Giving the flat models the same numbers keeps the comparison fair. | Keep the branch in the graph with an "out" marker (GCN/SAGE can't read edge features); give only the flag (loses the key quantity). |
 | D18 | **Training setup for MLP and GNNs:** cross-entropy loss with the insecure class up-weighted by (#secure / #insecure) in training; Adam, learning rate 1e-3; batch 128 graphs (256 for the MLP); at most 60 epochs; stop after 8 epochs without validation PR-AUC improvement and keep the best epoch. | Up-weighting handles the class imbalance without throwing data away. The epoch cap keeps the 5-seed sweep affordable. It was set from timing (2-30 s per epoch on CPU), before any GNN result. | Oversampling insecure samples; focal loss; longer training. |
-| D19 | **GNN shape:** linear encoder → 3 message-passing layers (64 units, residual connection + layer norm) → mean + max pooling → 2-layer head. Same for GCN, GraphSAGE and GATv2 (4 attention heads). | One shared skeleton, so differences come from the layer type. 3 layers = information travels 3 buses away. Max pooling matches the label, which is "any single violation". | Deeper models (tested as an ablation on Day 7); attention pooling. |
-| D20 | **S2 outages rotate through 5 stratified folds (changed on Day 5).** Outages are sorted by how often they are insecure and dealt round-robin into 5 fixed folds. Seed *s* tests fold *s*, validates on fold *s*+1, trains on the rest. All models were re-run on the new S2. | **Why the change, honestly:** after the first GNN runs I inspected the case30 S2 seed-0 test set and found that only 1 of its 7 outages was ever insecure, so its score measured a single outage (which the DC rule happened to catch). I had flagged this risk on Day 3. Rotation tests every outage exactly once over the 5 seeds, and stratification gives each fold a mix of dangerous and harmless outages. The change treats all models identically and uses labels only to balance folds, never to train. | Keep random 60/20/20 per seed (a noisy, partial test); leave-one-outage-out (38-177 folds, too expensive). |
+| D19 | **GNN shape:** linear encoder → 3 message-passing layers (64 units, residual connection + layer norm) → mean + max pooling → 2-layer head. Same for GCN, GraphSAGE and GATv2 (4 attention heads). | One shared skeleton, so differences come from the layer type. 3 layers = information travels 3 buses away. Max pooling matches the label, which is "any single violation". | Deeper models (tested as an ablation on Step 7); attention pooling. |
+| D20 | **S2 outages rotate through 5 stratified folds (changed on Step 5).** Outages are sorted by how often they are insecure and dealt round-robin into 5 fixed folds. Seed *s* tests fold *s*, validates on fold *s*+1, trains on the rest. All models were re-run on the new S2. | **Why the change, honestly:** after the first GNN runs I inspected the case30 S2 seed-0 test set and found that only 1 of its 7 outages was ever insecure, so its score measured a single outage (which the DC rule happened to catch). I had flagged this risk on Step 3. Rotation tests every outage exactly once over the 5 seeds, and stratification gives each fold a mix of dangerous and harmless outages. The change treats all models identically and uses labels only to balance folds, never to train. | Keep random 60/20/20 per seed (a noisy, partial test); leave-one-outage-out (38-177 folds, too expensive). |
 
 ---
 
 ## 6. Results so far
 
-### Day 1: grid inspection (container run, 21/10)
+### Step 1: grid inspection (container run, 21/10)
 
 From `python -m pgs.inspect_cases`. Ratings use D3 where the file has none. Max load = worst branch loading at the default operating point.
 
@@ -241,7 +241,7 @@ From `python -m pgs.inspect_cases`. Ratings use D3 where the file has none. Max 
 
 **What this means:** case30's default point overloads a line, so its usable operating points will come from lower loads. That is fine, because we keep only secure points (D7).
 
-### Day 2: case30 dataset (container run, 21/10, label hash `42676ea248`)
+### Step 2: case30 dataset (container run, 21/10, label hash `42676ea248`)
 
 | Quantity | Value |
 |---|---|
@@ -263,7 +263,7 @@ From `python -m pgs.inspect_cases`. Ratings use D3 where the file has none. Max 
 - Non-convergence never happened on case30, so the "with/without non-converged" ablation means nothing here.
 - The DC estimate of loading read about 0.70 where AC read 0.98 on one point. DC ignores reactive power, so a DC rule needs a threshold tuned on training data, not a fixed 1.0.
 
-### Day 3: case118 dataset (container run, 21/10, label hash `97790e93b9`)
+### Step 3: case118 dataset (container run, 21/10, label hash `97790e93b9`)
 
 | Quantity | case30 | case118 |
 |---|---|---|
@@ -293,9 +293,9 @@ S2 test folds contain 2-5 outages that are ever insecure on case30 (21-60 insecu
 - The first version of S2 (random 60/20/20 per seed) was worse. In case30 seed 0, only 1 of the 7 test outages was ever insecure, and all 33 insecure test samples came from it. Another seed had only 1.9% insecure test samples. D20 fixed that.
 - S2 also uses less data for training (only 60% of outages × 70% of points).
 
-### Day 4: baselines, seed 0 only (container run, CPU, 22/10; re-run after D17 and D20)
+### Step 4: baselines, seed 0 only (container run, CPU, 22/10; re-run after D17 and D20)
 
-Test set. PR-AUC / recall / F1 for the insecure class. **One seed only:** treat as a first look, not a result. The 5-seed table comes on Day 6. These numbers use the outage descriptor (D17) and, for S2, the rotating outage folds (D20). Seed 0 tests outage fold 0.
+Test set. PR-AUC / recall / F1 for the insecure class. **One seed only:** treat as a first look, not a result. The 5-seed table comes on Step 6. These numbers use the outage descriptor (D17) and, for S2, the rotating outage folds (D20). Seed 0 tests outage fold 0.
 
 | Model | case30 S1 | case30 S2 | case118 S1 | case118 S2 |
 |---|---|---|---|---|
@@ -313,18 +313,18 @@ Shuffled-label check (case30 S1, LightGBM): PR-AUC **0.106** vs base rate 0.112 
 **What this means:**
 - **S1 (known outages) is easy.** Just memorising dangerous outages (`cont_prior`) gets ~0.8. LightGBM and MLP add load-level awareness and reach 0.94-0.997.
 - **S2 (unseen outages) is hard for flat models,** especially on case118, where the best baseline reaches only 0.27 against a 0.10 base rate. *Why:* the outage is a one-hot column the model never saw switched on in training. Only the two descriptor numbers (tripped flow and loading) carry over to new outages.
-- **One fold of case30 is not a verdict.** Logistic regression scores 0.842 on the case30 test fold but only 0.376 on its validation fold (a different set of 8 outages). With 7-8 outages per fold, each score mostly reflects *which* outages are held out. Only the 5-fold average on Day 6 can be trusted.
+- **One fold of case30 is not a verdict.** Logistic regression scores 0.842 on the case30 test fold but only 0.376 on its validation fold (a different set of 8 outages). With 7-8 outages per fold, each score mostly reflects *which* outages are held out. Only the 5-fold average on Step 6 can be trusted.
 - **The outage descriptor helped flat models** (old S2 split, seed 0: LightGBM case30 went from 0.136 to 0.566 PR-AUC when D17 was added). Giving every model the same information was the right call.
 - **The DC rule ignores voltage.** About two-thirds of case30's insecure samples have voltage violations, which DC cannot see. That is why it is weak on S1 (0.452).
 
-### Day 5: GNNs, seed 0 only (container run, CPU, 22/10)
+### Step 5: GNNs, seed 0 only (container run, CPU, 22/10)
 
-Same format and test sets as the Day 4 table (PR-AUC / recall / F1).
+Same format and test sets as the Step 4 table (PR-AUC / recall / F1).
 
 | Model | case30 S1 | case30 S2 | case118 S1 | case118 S2 |
 |---|---|---|---|---|
 | Base rate | 0.112 | 0.167 | 0.086 | 0.097 |
-| Best baseline (from Day 4) | LightGBM 0.997 | LR 0.842 | LightGBM 0.962 | DC rule 0.274 |
+| Best baseline (from Step 4) | LightGBM 0.997 | LR 0.842 | LightGBM 0.962 | DC rule 0.274 |
 | GCN | 0.989 / 0.97 / 0.94 | 0.246 / 0.27 / 0.26 | 0.947 / 0.80 / 0.85 | 0.402 / 0.43 / 0.45 |
 | GraphSAGE | 0.989 / 0.94 / 0.95 | 0.179 / 0.10 / 0.09 | 0.950 / 0.75 / 0.85 | **0.468** / 0.18 / 0.26 |
 | GATv2 | 0.994 / 0.98 / 0.95 | 0.160 / 0.00 / 0.00 | 0.942 / 0.79 / 0.86 | 0.406 / 0.25 / 0.30 |
@@ -343,7 +343,7 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 
 **What this means:**
 - **Known outages (S1): GNNs match the best flat model but do not beat it** (case30: 0.989-0.994 vs LightGBM 0.997; case118: 0.942-0.950 vs 0.962). When every outage has been seen in training, a graph is not needed.
-- **Unseen outages on case118 (S2): the GNNs are the best models on both held-out folds.** On test they score 0.40-0.47 vs at most 0.27 for any baseline, and on validation 0.54-0.58 vs at most 0.24. This is the result the project was designed to test, but it is **one seed**. Day 6 decides.
+- **Unseen outages on case118 (S2): the GNNs are the best models on both held-out folds.** On test they score 0.40-0.47 vs at most 0.27 for any baseline, and on validation 0.54-0.58 vs at most 0.24. This is the result the project was designed to test, but it is **one seed**. Step 6 decides.
 - **Unseen outages on case30 flip between folds.** The GNNs are near chance on the test fold but the best models on the validation fold (GCN 0.896). Logistic regression does the opposite. With 7-8 outages per fold, case30 S2 is too small to judge from one fold.
 - **Recall at the chosen threshold is low on S2** (0.10-0.43). PR-AUC says the *ranking* of risky cases is useful, but the threshold picked on validation outages does not transfer well to new outages. For screening, you would lower the threshold to raise recall and accept more false alarms.
 - **Speed (indicative only):** GCN predicted the 1,710 case30 S1 test samples in 0.15 s on CPU, under 0.1 ms per sample. One pandapower AC power flow took about 43 ms here. That is not a fair engineering benchmark (batched neural network vs one unoptimised solver call), so we do not claim a speed-up figure.
@@ -386,7 +386,7 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 13. **One model scored 0.995-0.997. Wasn't that leakage?** I treated it as leakage until checked. Shuffled labels gave chance level (0.106-0.120 vs a 0.112 base rate), and feature importance pointed to physically sensible features. The task on known outages is just easy. That is why I also test on unseen outages.
 14. **Why do classic models fail on unseen outages?** They see the outage as a one-hot column. If that column was never 1 in training, the model learned nothing about it. A graph model instead sees the outage as a change in a structure it knows.
 15. **Why can a GNN handle an outage it never saw?** Weight sharing. The same message function runs at every bus and every branch. What it learns about how power reroutes around a missing branch in one part of the grid applies anywhere else. A flat model has separate weights for each input column, so nothing transfers.
-16. **Did the GNN beat the baselines?** *(Seed 0 so far; the 5-seed answer comes on Day 6.)* Only where it should: on unseen outages in the 118-bus grid, it led on both held-out outage folds (PR-AUC 0.40-0.47 vs at most 0.27 on test). On known outages it matched LightGBM (0.99 vs 0.997 on case30) but did not beat it. On the small 30-bus grid, results flipped between folds, because each fold has only 7-8 outages.
+16. **Did the GNN beat the baselines?** *(Seed 0 so far; the 5-seed answer comes on Step 6.)* Only where it should: on unseen outages in the 118-bus grid, it led on both held-out outage folds (PR-AUC 0.40-0.47 vs at most 0.27 on test). On known outages it matched LightGBM (0.99 vs 0.997 on case30) but did not beat it. On the small 30-bus grid, results flipped between folds, because each fold has only 7-8 outages.
 17. **Why did you change your test split halfway?** I looked at what one test fold contained and saw that only 1 of its 7 outages was ever insecure, so the score measured one outage. I switched to 5 rotating, balanced outage folds, so every outage is tested exactly once, and re-ran every model. I logged the change and the reason (decision D20). The change was the same for all models.
 18. **Your recall on unseen outages is low. Is the model useless there?** The ranking is useful (PR-AUC is 3-5× the base rate on case118), but the threshold tuned on validation outages does not transfer well to new outages. In screening, you would pick a lower threshold and accept more false alarms, because missing an insecure case is the expensive error.
 

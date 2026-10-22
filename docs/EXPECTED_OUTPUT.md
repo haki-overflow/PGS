@@ -1,10 +1,10 @@
-# Expected output, day by day
+# Expected output, step by step
 
 Reference output from the development run (4-CPU Linux container, no GPU, Python 3.13, the
 pinned versions in `requirements.txt`). Use it to check your local runs.
 
-**What must match exactly:** grid facts (Day 1), sample counts, insecure rates and **label
-hashes** (Days 2-3), split sizes (Day 3), and the rule-based rows (`majority`, `cont_prior`,
+**What must match exactly:** grid facts (Step 1), sample counts, insecure rates and **label
+hashes** (Steps 2-3), split sizes (Step 3), and the rule-based rows (`majority`, `cont_prior`,
 `base_loading`, `dc_rule`).
 **What may differ a little:** timings (`ms_per_pf`, `sec`, `time`), `device` (yours should say
 `cuda`), and the neural models (MLP, GCN, GraphSAGE, GAT): GPU arithmetic is not bit-identical
@@ -17,7 +17,7 @@ Run everything from the repo root, inside the virtual environment, after
 
 ---
 
-## Day 1: `bash scripts/day1.sh` (about 1 min)
+## Step 1: `bash scripts/1_check_grids.sh` (about 1 min)
 
 ```
         case        buses        lines       trafos         gens real_ratings    islanding         vmin         vmax     max_load  base_secure    ms_per_pf
@@ -29,7 +29,7 @@ Run everything from the repo root, inside the virtual environment, after
 7 passed
 ```
 
-## Day 2: `bash scripts/day2.sh` (about 2-3 min)
+## Step 2: `bash scripts/2_make_case30_data.sh` (about 2-3 min)
 
 ```
 case30: 785 candidates -> base-secure 38.2%; kept 300 OPs x 38 outages = 11400 samples (3 islanding outages excluded)
@@ -42,7 +42,7 @@ case30: 785 candidates -> base-secure 38.2%; kept 300 OPs x 38 outages = 11400 s
 6 passed
 ```
 
-## Day 3: `bash scripts/day3.sh` (about 12 min on 4 cores; faster with more)
+## Step 3: `bash scripts/3_make_case118_data.sh` (about 12 min on 4 cores; faster with more)
 
 ```
 case118: 259 candidates -> base-secure 46.3%; kept 120 OPs x 177 outages = 21240 samples (9 islanding outages excluded)
@@ -59,7 +59,7 @@ case118  op    seed0 train/val/test = [14868, 3186, 3186]; insecure % over 5 see
 case118  cont  seed0 train/val/test = [8820, 648, 648]; insecure % over 5 seeds: train 8.3-10.4, test 6.5-9.7
 ```
 
-## Day 4: `bash scripts/day4.sh` (about 3-5 min)
+## Step 4: `bash scripts/4_baselines.sh` (about 3-5 min)
 
 Columns: test PR-AUC, recall, precision, F1, base rate, seconds.
 
@@ -105,7 +105,7 @@ op    lgbm_shuffled    0   0.106   0.995   0.112   0.202  0.112    3.1
 
 The last line is the leakage check. It must stay near the base rate (0.112).
 
-## Day 5: `bash scripts/day5.sh` (CPU here: about 25 min for case30 + 75 min for case118; a GPU should be much faster)
+## Step 5: `bash scripts/5_gnns.sh` (CPU here: about 25 min for case30 + 75 min for case118; a GPU should be much faster)
 
 ```
 ......                                                                   [100%]
@@ -129,9 +129,9 @@ cont  gat             0   0.406   0.254   0.364   0.299  0.097  716.9
 ```
 
 GNN lines on a GPU will not match to the third decimal. What should hold: on case118 S2, the
-GNNs beat every Day 4 baseline row (best 0.274); on S1 they land near LightGBM.
+GNNs beat every Step 4 baseline row (best 0.274); on S1 they land near LightGBM.
 
-## Days 6-7
+## Steps 6-7
 
 No reference output yet: these runs (5 seeds × all models, then ablations) are meant for your
 GPU. Paste the final tables (`python -m pgs.aggregate` prints them) and they go into the guide.

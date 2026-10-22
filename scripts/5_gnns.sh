@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Day 5: GCN, GraphSAGE and GATv2 on both grids, seed 0.
+# Step 5: GCN, GraphSAGE and GATv2 on both grids, seed 0.
 set -euo pipefail
 python -m pytest -q tests/test_metrics_models.py
 for grid in case30 case118; do

@@ -7,5 +7,5 @@ python -m pgs.generate --grid case118
 python -m pytest -q
 python -m pgs.splits
 rm -rf results/runs
-bash scripts/day6.sh
-bash scripts/day7.sh
+bash scripts/6_all_seeds.sh
+bash scripts/7_ablations.sh

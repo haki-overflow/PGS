@@ -1,4 +1,4 @@
-"""Day 1: print the facts about each test grid that our design depends on.
+"""Step 1: print the facts about each test grid that our design depends on.
 
 Usage: python -m pgs.inspect_cases
 """

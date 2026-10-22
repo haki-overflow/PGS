@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Day 4: rule and classic-ML baselines on both grids, seed 0, plus the leakage check.
+# Step 4: rule and classic-ML baselines on both grids, seed 0, plus the leakage check.
 set -euo pipefail
 python -m pytest -q tests/test_metrics_models.py
 for grid in case30 case118; do

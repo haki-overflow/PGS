@@ -22,21 +22,21 @@ The pinned `torch` wheel from PyPI is a CUDA build. A GPU is not required, since
 
 | Step | Command |
 |---|---|
-| Day 1: inspect grids, test label logic | `bash scripts/day1.sh` |
-| Day 2: generate case30 data (about 2 min on 4 cores) | `bash scripts/day2.sh` |
-| Day 3: generate case118 data (about 12 min on 4 cores), test splits | `bash scripts/day3.sh` |
-| Day 4: rule and classic-ML baselines, seed 0 (about 5 min) | `bash scripts/day4.sh` |
-| Day 5: GCN, GraphSAGE, GATv2, seed 0 | `bash scripts/day5.sh` |
-| Day 6: all models, 5 seeds, mean ± std tables | `bash scripts/day6.sh` |
-| Day 7: sanity checks and ablations | `bash scripts/day7.sh` |
+| Step 1: inspect grids, test label logic | `bash scripts/1_check_grids.sh` |
+| Step 2: generate case30 data (about 2 min on 4 cores) | `bash scripts/2_make_case30_data.sh` |
+| Step 3: generate case118 data (about 12 min on 4 cores), test splits | `bash scripts/3_make_case118_data.sh` |
+| Step 4: rule and classic-ML baselines, seed 0 (about 5 min) | `bash scripts/4_baselines.sh` |
+| Step 5: GCN, GraphSAGE, GATv2, seed 0 | `bash scripts/5_gnns.sh` |
+| Step 6: all models, 5 seeds, mean ± std tables | `bash scripts/6_all_seeds.sh` |
+| Step 7: sanity checks and ablations | `bash scripts/7_ablations.sh` |
 | Everything from scratch | `bash scripts/reproduce.sh` |
 
 Results tables are written to `results/main_table.md` and `results/ablations.md`.
-Reference output for each day's command: [`docs/EXPECTED_OUTPUT.md`](docs/EXPECTED_OUTPUT.md).
+Reference output for each step's command: [`docs/EXPECTED_OUTPUT.md`](docs/EXPECTED_OUTPUT.md).
 
 ## Status
 
-Day 5 of 9 done. Results: see the guide, Section 6.
+Step 5 of 9 done. Results: see the guide, Section 6.
 
 ## Tools
 
