@@ -327,7 +327,7 @@ Same format and test sets as the Day 4 table (PR-AUC / recall / F1).
 | Best baseline (from Day 4) | LightGBM 0.997 | LR 0.842 | LightGBM 0.962 | DC rule 0.274 |
 | GCN | 0.989 / 0.97 / 0.94 | 0.246 / 0.27 / 0.26 | 0.947 / 0.80 / 0.85 | 0.402 / 0.43 / 0.45 |
 | GraphSAGE | 0.989 / 0.94 / 0.95 | 0.179 / 0.10 / 0.09 | 0.950 / 0.75 / 0.85 | **0.468** / 0.18 / 0.26 |
-| GATv2 | 0.994 / 0.98 / 0.95 | 0.160 / 0.00 / 0.00 | (running) | 0.406 / 0.25 / 0.30 |
+| GATv2 | 0.994 / 0.98 / 0.95 | 0.160 / 0.00 / 0.00 | 0.942 / 0.79 / 0.86 | 0.406 / 0.25 / 0.30 |
 
 Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 (outage fold 1, never used for training, but used for early stopping, so slightly optimistic for the neural models):
 
@@ -342,7 +342,7 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 | GATv2 | 0.822 | 0.577 |
 
 **What this means:**
-- **Known outages (S1): GNNs match the best flat model (0.989-0.994 vs 0.997 on case30) but do not beat it.** When every outage has been seen in training, a graph is not needed.
+- **Known outages (S1): GNNs match the best flat model but do not beat it** (case30: 0.989-0.994 vs LightGBM 0.997; case118: 0.942-0.950 vs 0.962). When every outage has been seen in training, a graph is not needed.
 - **Unseen outages on case118 (S2): the GNNs are the best models on both held-out folds.** On test they score 0.40-0.47 vs at most 0.27 for any baseline, and on validation 0.54-0.58 vs at most 0.24. This is the result the project was designed to test, but it is **one seed**. Day 6 decides.
 - **Unseen outages on case30 flip between folds.** The GNNs are near chance on the test fold but the best models on the validation fold (GCN 0.896). Logistic regression does the opposite. With 7-8 outages per fold, case30 S2 is too small to judge from one fold.
 - **Recall at the chosen threshold is low on S2** (0.10-0.43). PR-AUC says the *ranking* of risky cases is useful, but the threshold picked on validation outages does not transfer well to new outages. For screening, you would lower the threshold to raise recall and accept more false alarms.

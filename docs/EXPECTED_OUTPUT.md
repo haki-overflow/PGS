@@ -122,7 +122,7 @@ case118: 21240 samples, device cuda
 split model        seed  PR-AUC  recall    prec      F1   base    sec
 op    gcn             0   0.947   0.799   0.909   0.850  0.086  856.4
 op    sage            0   0.950   0.745   0.990   0.850  0.086  505.8
-op    gat   (still running when this file was written; filled in when it finishes)
+op    gat             0   0.942   0.788   0.952   0.862  0.086 1014.2
 cont  gcn             0   0.402   0.429   0.474   0.450  0.097  104.4
 cont  sage            0   0.468   0.175   0.500   0.259  0.097  175.5
 cont  gat             0   0.406   0.254   0.364   0.299  0.097  716.9
