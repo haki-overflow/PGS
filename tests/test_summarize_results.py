@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from pgs.aggregate import best_gnn, load_runs, table
+from pgs.summarize_results import best_gnn, load_runs, table
 
 
 def write_run(d, model, seed, test_ap, val_ap, split="cont", tag=""):

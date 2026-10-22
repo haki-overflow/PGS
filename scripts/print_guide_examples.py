@@ -1,11 +1,11 @@
 """Print the real numbers used in the worked examples of docs/PROJECT_GUIDE.md.
 
-Usage: python scripts/guide_examples.py
+Usage: python scripts/print_guide_examples.py
 """
 import numpy as np
 import pandapower as pp
 
-from pgs.grid import assess, branch_flows_mva, branch_table, run_ac, set_branch_in_service
+from pgs.power_flow import assess, branch_flows_mva, branch_table, run_ac, set_branch_in_service
 
 
 def four_bus_ring():

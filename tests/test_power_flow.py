@@ -1,7 +1,7 @@
 import numpy as np
 import pandapower as pp
 
-from pgs.grid import (assess, branch_table, islanding_branches, run_ac,
+from pgs.power_flow import (assess, branch_table, islanding_branches, run_ac,
                       set_branch_in_service)
 
 

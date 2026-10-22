@@ -1,6 +1,6 @@
 """Generate labelled (operating point, N-1 outage) samples for one grid.
 
-Usage: python -m pgs.generate --grid case30 [--workers 8] [--n-ops 300]
+Usage: python -m pgs.generate_dataset --grid case30 [--workers 8] [--n-ops 300]
 
 Writes data/<grid>/samples.parquet (one row per sample: label + diagnostics),
 data/<grid>/arrays.npz (input features) and data/<grid>/meta.json.
@@ -19,7 +19,7 @@ import pandas as pd
 import pandapower as pp
 
 from pgs import config
-from pgs.grid import (S_BASE, assess, assign_ratings, branch_flows_mva,
+from pgs.power_flow import (S_BASE, assess, assign_ratings, branch_flows_mva,
                       branch_p_from_mw, branch_table, islanding_branches,
                       load_case, run_ac, run_ac_with_retries,
                       set_branch_in_service)

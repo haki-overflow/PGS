@@ -1,8 +1,8 @@
 """Train and evaluate models on one grid, for given splits and seeds.
 
 Usage:
-  python -m pgs.run --grid case30 --splits op,cont --models rules,lr,lgbm,mlp --seeds 0
-  python -m pgs.run --grid case118 --models gcn,sage,gat --seeds 0-4
+  python -m pgs.train_and_evaluate --grid case30 --splits op,cont --models rules,lr,lgbm,mlp --seeds 0
+  python -m pgs.train_and_evaluate --grid case118 --models gcn,sage,gat --seeds 0-4
 
 Each (grid, split, model, seed) writes results/runs/<name>.json with validation and
 test metrics. The decision threshold is tuned on validation only.
@@ -19,10 +19,10 @@ from sklearn.linear_model import LogisticRegression
 from torch_geometric.loader import DataLoader as GraphLoader
 
 from pgs import config
-from pgs.dataset import Scaler, flat_features, graph_dataset, load_grid
+from pgs.features import Scaler, flat_features, graph_dataset, load_grid
 from pgs.metrics import evaluate, tune_threshold
 from pgs.models import GNN, MLP
-from pgs.splits import make_split
+from pgs.train_test_splits import make_split
 
 RULES = ["majority", "cont_prior", "base_loading", "dc_rule"]
 CLASSIC = ["lr", "lgbm", "mlp"]

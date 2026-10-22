@@ -17,7 +17,7 @@ Run everything from the repo root, inside the virtual environment, after
 
 ---
 
-## Step 1: `bash scripts/1_check_grids.sh` (about 1 min)
+## Step 1: `bash scripts/step1_check_grids_and_label.sh` (about 1 min)
 
 ```
         case        buses        lines       trafos         gens real_ratings    islanding         vmin         vmax     max_load  base_secure    ms_per_pf
@@ -29,7 +29,7 @@ Run everything from the repo root, inside the virtual environment, after
 7 passed
 ```
 
-## Step 2: `bash scripts/2_make_case30_data.sh` (about 2-3 min)
+## Step 2: `bash scripts/step2_generate_case30_dataset.sh` (about 2-3 min)
 
 ```
 case30: 785 candidates -> base-secure 38.2%; kept 300 OPs x 38 outages = 11400 samples (3 islanding outages excluded)
@@ -42,7 +42,7 @@ case30: 785 candidates -> base-secure 38.2%; kept 300 OPs x 38 outages = 11400 s
 6 passed
 ```
 
-## Step 3: `bash scripts/3_make_case118_data.sh` (about 12 min on 4 cores; faster with more)
+## Step 3: `bash scripts/step3_generate_case118_dataset_and_splits.sh` (about 12 min on 4 cores; faster with more)
 
 ```
 case118: 259 candidates -> base-secure 46.3%; kept 120 OPs x 177 outages = 21240 samples (9 islanding outages excluded)
@@ -59,7 +59,7 @@ case118  op    seed0 train/val/test = [14868, 3186, 3186]; insecure % over 5 see
 case118  cont  seed0 train/val/test = [8820, 648, 648]; insecure % over 5 seeds: train 8.3-10.4, test 6.5-9.7
 ```
 
-## Step 4: `bash scripts/4_baselines.sh` (about 3-5 min)
+## Step 4: `bash scripts/step4_train_baselines_seed0.sh` (about 3-5 min)
 
 Columns: test PR-AUC, recall, precision, F1, base rate, seconds.
 
@@ -105,7 +105,7 @@ op    lgbm_shuffled    0   0.106   0.995   0.112   0.202  0.112    3.1
 
 The last line is the leakage check. It must stay near the base rate (0.112).
 
-## Step 5: `bash scripts/5_gnns.sh` (CPU here: about 25 min for case30 + 75 min for case118; a GPU should be much faster)
+## Step 5: `bash scripts/step5_train_gnns_seed0.sh` (CPU here: about 25 min for case30 + 75 min for case118; a GPU should be much faster)
 
 ```
 ......                                                                   [100%]
@@ -134,4 +134,4 @@ GNNs beat every Step 4 baseline row (best 0.274); on S1 they land near LightGBM.
 ## Steps 6-7
 
 No reference output yet: these runs (5 seeds × all models, then ablations) are meant for your
-GPU. Paste the final tables (`python -m pgs.aggregate` prints them) and they go into the guide.
+GPU. Paste the final tables (`python -m pgs.summarize_results` prints them) and they go into the guide.

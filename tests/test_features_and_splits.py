@@ -3,9 +3,9 @@ import pandas as pd
 import pytest
 
 from pgs import config
-from pgs.dataset import (OUTAGE_NODE_FEATURES, Scaler, flat_features, graph_dataset,
+from pgs.features import (OUTAGE_NODE_FEATURES, Scaler, flat_features, graph_dataset,
                          node_inputs)
-from pgs.splits import make_split
+from pgs.train_test_splits import make_split
 
 N_OPS, N_BUS = 20, 4
 EDGES = np.array([[0, 1, 2, 3, 0], [1, 2, 3, 0, 2]])  # ring plus a chord
@@ -54,7 +54,7 @@ def test_cont_split_tests_every_outage_exactly_once_over_five_seeds(toy):
 
 
 def test_outage_folds_spread_the_most_dangerous_outages():
-    from pgs.splits import outage_folds
+    from pgs.train_test_splits import outage_folds
     rows = [(o, c, c < 5) for o in range(4) for c in range(25)]  # outages 0-4 always insecure
     df = pd.DataFrame(rows, columns=["op", "cont", "insecure"])
     folds = outage_folds(df)
@@ -96,7 +96,7 @@ def test_reverse_edge_flips_active_power(toy):
     p = len(config.EDGE_STATIC_FEATURES) + config.EDGE_BASE_FEATURES.index("p_from_base")
     e = g.edge_index.shape[1] // 2
     # undo scaling via a fresh scaler fitted the same way, then compare raw values
-    from pgs.dataset import edge_inputs
+    from pgs.features import edge_inputs
     s = Scaler().fit(edge_inputs(arrays, df))
     raw_fwd = g.edge_attr[:e, p].numpy() * s.std[p] + s.mean[p]
     raw_rev = g.edge_attr[e:, p].numpy() * s.std[p] + s.mean[p]

@@ -5,7 +5,7 @@ from torch_geometric.data import Batch, Data
 
 from pgs.metrics import evaluate, tune_threshold
 from pgs.models import GNN, MLP
-from pgs.run import rule_scores
+from pgs.train_and_evaluate import rule_scores
 
 
 def test_metrics_on_known_example():

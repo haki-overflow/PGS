@@ -1,10 +1,10 @@
 """Step 1: print the facts about each test grid that our design depends on.
 
-Usage: python -m pgs.inspect_cases
+Usage: python -m pgs.inspect_grids
 """
 import time
 
-from pgs.grid import (assess, assign_ratings, branch_table, islanding_branches,
+from pgs.power_flow import (assess, assign_ratings, branch_table, islanding_branches,
                       load_case, run_ac)
 
 

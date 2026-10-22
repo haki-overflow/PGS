@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from pgs import config
-from pgs.generate import generate, label_hash
+from pgs.generate_dataset import generate, label_hash
 
 
 @pytest.fixture(scope="module")

@@ -1,7 +1,7 @@
 """Collect results/runs/*.json into mean +/- std tables over seeds.
 
-Usage: python -m pgs.aggregate                  (write the tables)
-       python -m pgs.aggregate --best-gnn case118 (print the GNN chosen on validation)
+Usage: python -m pgs.summarize_results                  (write the tables)
+       python -m pgs.summarize_results --best-gnn case118 (print the GNN chosen on validation)
 Writes results/main_table.md (untagged runs) and results/ablations.md (tagged runs).
 """
 import glob
@@ -12,7 +12,7 @@ import sys
 import pandas as pd
 
 from pgs import config
-from pgs.run import CLASSIC, GNNS, RULES
+from pgs.train_and_evaluate import CLASSIC, GNNS, RULES
 
 ORDER = RULES + CLASSIC + GNNS
 METRICS = ["pr_auc", "recall", "precision", "f1"]

@@ -88,14 +88,14 @@ More terms are added at the step where we first use them.
 ### Step 1: inspect the grids, lock the label
 
 - **Set up a pinned environment.** Every library version is fixed in `requirements.txt`. *Why:* pandapower's case files and PyTorch Geometric change between versions, and results must be reproducible.
-- **Inspected the four candidate grids** (`python -m pgs.inspect_cases`). We looked at size, whether the branch ratings in the file are real, which outages island the grid, and whether the default operating point is already within limits. *Why:* a label is only meaningful if the limits it checks are meaningful.
+- **Inspected the four candidate grids** (`python -m pgs.inspect_grids`). We looked at size, whether the branch ratings in the file are real, which outages island the grid, and whether the default operating point is already within limits. *Why:* a label is only meaningful if the limits it checks are meaningful.
 - **Found that case14 and case118 have no real ratings.** Every branch says 9900 MVA, which MATPOWER uses to mean "no limit". Without a fix, "overload" could never happen on them. We chose a planning-style synthetic rating (decision D3).
 - **Found that case39 is unusable with our label.** One generator holds its voltage at 1.064 p.u., above our 1.06 limit, so every sample would be "insecure". We dropped it (D5).
-- **Wrote the label code and 7 tests** (`pgs/grid.py`, `tests/test_grid.py`). The tests check, on a hand-built 3-bus grid, that overloads, low voltages and solver failures are all labelled insecure, and that islanding outages are detected. *Why:* if the label is wrong, every result after it is wrong.
+- **Wrote the label code and 7 tests** (`pgs/power_flow.py`, `tests/test_power_flow.py`). The tests check, on a hand-built 3-bus grid, that overloads, low voltages and solver failures are all labelled insecure, and that islanding outages are detected. *Why:* if the label is wrong, every result after it is wrong.
 
 ### Step 2: generate the case30 dataset
 
-- **Sampled random operating points** (`pgs/generate.py`). Each one scales all loads by a global factor drawn uniformly from 0.7 to 1.3, then by a per-bus random factor (about ±7%). Generators are redispatched in proportion, with ±10% noise. *Why:* real grids never sit at one fixed load. We need variety so the model learns patterns, not one snapshot.
+- **Sampled random operating points** (`pgs/generate_dataset.py`). Each one scales all loads by a global factor drawn uniformly from 0.7 to 1.3, then by a per-bus random factor (about ±7%). Generators are redispatched in proportion, with ±10% noise. *Why:* real grids never sit at one fixed load. We need variety so the model learns patterns, not one snapshot.
 - **Kept only operating points that are secure before any outage** (D7). Only 38% of random points passed, mostly the lower-load ones, because case30's default point already overloads a line.
 - **For each kept point, ran all 38 non-islanding outages** with full AC power flow, labelling each one. That gives 300 × 38 = 11,400 samples. *Why:* this is exactly the N-1 check an operator runs.
 - **Also stored a DC power-flow estimate** for every outage, used only by a rule baseline later, never as a model input. *Why:* "a cheap physics approximation" is the fair baseline a GNN must beat.
@@ -105,17 +105,17 @@ More terms are added at the step where we first use them.
 ### Step 3: case118 data, splits, graphs
 
 - **Generated the case118 dataset:** 120 operating points × 177 outages = 21,240 samples. *Why:* case30 is small. A GNN's advantage, if any, should show on the bigger grid.
-- **Built two leakage-safe splits** (`pgs/splits.py`). *Why:* a random split per sample would put the *same operating point* in both train and test, just with a different outage. The model could then recognise the operating point instead of learning physics.
+- **Built two leakage-safe splits** (`pgs/train_test_splits.py`). *Why:* a random split per sample would put the *same operating point* in both train and test, just with a different outage. The model could then recognise the operating point instead of learning physics.
   - **S1 "unseen operating points":** operating points are divided 70/15/15. No point appears in two sets, but every outage appears everywhere.
   - **S2 "unseen outages":** operating points are divided 70/15/15 *and* outages are dealt into 5 folds. Seed *s* tests on fold *s*, validates on fold *s*+1 and trains on the other 3 (so 60/20/20). Over the 5 seeds every outage is tested exactly once. Test samples combine new operating points with outages the model has *never* seen. This is the harder and more interesting test. (Changed on Step 5, see D20.)
-- **Built the graph view of each sample** (`pgs/dataset.py`). Buses are nodes with 10 pre-outage features, plus a flag that is 1 on the two buses at the ends of the outaged branch (from Step 5 also the tripped branch's flow and loading on those two buses, D17). In-service branches are edges in both directions. The outaged branch is **removed**. *Why:* the GNN should "see" the hole in the grid.
+- **Built the graph view of each sample** (`pgs/features.py`). Buses are nodes with 10 pre-outage features, plus a flag that is 1 on the two buses at the ends of the outaged branch (from Step 5 also the tripped branch's flow and loading on those two buses, D17). In-service branches are edges in both directions. The outaged branch is **removed**. *Why:* the GNN should "see" the hole in the grid.
 - **Built the flat view for classic models.** All bus features, all branch features, a one-hot vector saying which branch is out, and (from Step 5) the outaged branch's pre-outage flow and loading, joined into one long list (case30: 425 numbers; case118: 1,740). *Why:* logistic regression, gradient boosting and MLPs need a fixed-length input.
 - **Scaling uses training data only.** *Why:* computing the mean and spread over all data would leak a little information about the test set into training.
 - **Tests (16)** check that splits never share an operating point (S1) or an outage (S2), that the outaged branch is really removed, that reversed edges flip the sign of power flow, and that the scaler only sees training rows.
 
 ### Step 4: baselines
 
-- **Four rules with no real learning** (`pgs/run.py`). *Why:* they show how much of the problem is trivial.
+- **Four rules with no real learning** (`pgs/train_and_evaluate.py`). *Why:* they show how much of the problem is trivial.
   - `majority`: always says secure.
   - `cont_prior`: "how often was this outage insecure in training?" It memorises dangerous outages and nothing else.
   - `base_loading`: the worst branch loading *before* the outage.
@@ -140,7 +140,7 @@ More terms are added at the step where we first use them.
 
 ## 4. Worked examples (real numbers)
 
-Produced by `PYTHONPATH=. python scripts/guide_examples.py`.
+Produced by `PYTHONPATH=. python scripts/print_guide_examples.py`.
 
 ### Example 1: one N-1 outage on a 4-bus ring
 
@@ -228,7 +228,7 @@ Ten samples, 2 insecure (base rate 0.2). Model scores: 0.9, 0.8, 0.3, 0.2, 0.1, 
 
 ### Step 1: grid inspection (container run, 21/10)
 
-From `python -m pgs.inspect_cases`. Ratings use D3 where the file has none. Max load = worst branch loading at the default operating point.
+From `python -m pgs.inspect_grids`. Ratings use D3 where the file has none. Max load = worst branch loading at the default operating point.
 
 | Case | Buses | Lines | Trafos | Gens | Real ratings | Islanding outages | Vmin | Vmax | Max load | Secure at default? |
 |---|---|---|---|---|---|---|---|---|---|---|

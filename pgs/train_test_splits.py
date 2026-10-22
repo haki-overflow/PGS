@@ -52,7 +52,7 @@ def make_split(df, kind, seed):
 
 def report(grids=("case30", "case118"), seeds=range(5)):
     """Print split sizes and insecure rates, to check every test set has positives."""
-    from pgs.dataset import load_grid
+    from pgs.features import load_grid
     for grid in grids:
         df, _ = load_grid(grid)
         for kind in SPLITS:

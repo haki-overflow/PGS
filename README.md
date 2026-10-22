@@ -22,14 +22,14 @@ The pinned `torch` wheel from PyPI is a CUDA build. A GPU is not required, since
 
 | Step | Command |
 |---|---|
-| Step 1: inspect grids, test label logic | `bash scripts/1_check_grids.sh` |
-| Step 2: generate case30 data (about 2 min on 4 cores) | `bash scripts/2_make_case30_data.sh` |
-| Step 3: generate case118 data (about 12 min on 4 cores), test splits | `bash scripts/3_make_case118_data.sh` |
-| Step 4: rule and classic-ML baselines, seed 0 (about 5 min) | `bash scripts/4_baselines.sh` |
-| Step 5: GCN, GraphSAGE, GATv2, seed 0 | `bash scripts/5_gnns.sh` |
-| Step 6: all models, 5 seeds, mean ± std tables | `bash scripts/6_all_seeds.sh` |
-| Step 7: sanity checks and ablations | `bash scripts/7_ablations.sh` |
-| Everything from scratch | `bash scripts/reproduce.sh` |
+| Step 1: inspect grids, test label logic | `bash scripts/step1_check_grids_and_label.sh` |
+| Step 2: generate case30 data (about 2 min on 4 cores) | `bash scripts/step2_generate_case30_dataset.sh` |
+| Step 3: generate case118 data (about 12 min on 4 cores), test splits | `bash scripts/step3_generate_case118_dataset_and_splits.sh` |
+| Step 4: rule and classic-ML baselines, seed 0 (about 5 min) | `bash scripts/step4_train_baselines_seed0.sh` |
+| Step 5: GCN, GraphSAGE, GATv2, seed 0 | `bash scripts/step5_train_gnns_seed0.sh` |
+| Step 6: all models, 5 seeds, mean ± std tables | `bash scripts/step6_train_all_models_5_seeds.sh` |
+| Step 7: sanity checks and ablations | `bash scripts/step7_run_ablations_and_sanity_checks.sh` |
+| Everything from scratch | `bash scripts/reproduce_everything.sh` |
 
 Results tables are written to `results/main_table.md` and `results/ablations.md`.
 Reference output for each step's command: [`docs/EXPECTED_OUTPUT.md`](docs/EXPECTED_OUTPUT.md).
