@@ -368,7 +368,7 @@ Full tables: `results/main_table.md`. Test PR-AUC, mean ± std over 5 seeds. For
 Fold by fold on **case118 S2**, each GNN beat the *best* baseline of that fold (picked with hindsight, which flatters the baselines) in **3 of 5 folds**. In the other two, the DC rule won.
 
 **What this means (the honest headline):**
-- **Known outages (S1): LightGBM is best on both grids.** The GNNs come close (0.98 vs 0.996; 0.955 vs 0.964) but never beat it in any of the 10 folds. A graph model is not needed when every outage was seen in training.
+- **Known outages (S1): LightGBM is best on both grids.** The GNNs come close (0.98 vs 0.996; 0.955 vs 0.964) and beat it in only 3 of 30 per-fold comparisons (GraphSAGE once and GAT twice, all on case118). A graph model is not needed when every outage was seen in training.
 - **Unseen outages on the 118-bus grid (S2): GNNs have the highest average** (0.37-0.40 vs 0.30 for the best baseline, about 5× the 0.08 base rate). But the spread is large (± 0.17), and they win in only 3 of 5 folds. This is **promising evidence, not proof.**
 - **Unseen outages on the 30-bus grid: no clear winner.** Every model swings wildly between folds (std 0.2-0.3). The DC rule has the best average. With only 7-8 outages per fold, this grid is too small to judge generalisation.
 - **Recall on unseen outages is unreliable** (± 0.17-0.40). The threshold chosen on validation outages often does not suit new outages.
