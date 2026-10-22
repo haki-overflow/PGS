@@ -36,7 +36,7 @@ Reference output for each step's command: [`docs/EXPECTED_OUTPUT.md`](docs/EXPEC
 
 ## Status
 
-Step 5 of 9 done. Results: see the guide, Section 6.
+Step 6 of 9 done (5-seed results in `results/main_table.md`). Results: see the guide, Section 6.
 
 ## Tools
 

@@ -348,6 +348,31 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 - **Recall at the chosen threshold is low on S2** (0.10-0.43). PR-AUC says the *ranking* of risky cases is useful, but the threshold picked on validation outages does not transfer well to new outages. For screening, you would lower the threshold to raise recall and accept more false alarms.
 - **Speed (indicative only):** GCN predicted the 1,710 case30 S1 test samples in 0.15 s on CPU, under 0.1 ms per sample. One pandapower AC power flow took about 43 ms here. That is not a fair engineering benchmark (batched neural network vs one unoptimised solver call), so we do not claim a speed-up figure.
 
+### Step 6: all models, 5 seeds (container run, CPU, 22/10)
+
+Full tables: `results/main_table.md`. Test PR-AUC, mean ± std over 5 seeds. For S2, each seed holds out a different fifth of the outages, so together the 5 seeds test every outage once.
+
+| Model | case30 S1 | case30 S2 | case118 S1 | case118 S2 |
+|---|---|---|---|---|
+| Base rate (random) | 0.117 | 0.115 | 0.079 | 0.080 |
+| cont_prior (memorise outages) | 0.794 ± 0.028 | 0.115 ± 0.041 | 0.812 ± 0.036 | 0.080 ± 0.014 |
+| dc_rule | 0.445 ± 0.041 | **0.550 ± 0.179** | 0.291 ± 0.068 | 0.299 ± 0.101 |
+| LR | 0.960 ± 0.012 | 0.334 ± 0.295 | 0.921 ± 0.029 | 0.233 ± 0.052 |
+| LightGBM | **0.996 ± 0.002** | 0.437 ± 0.244 | **0.964 ± 0.015** | 0.237 ± 0.041 |
+| MLP | 0.973 ± 0.009 | 0.208 ± 0.043 | 0.940 ± 0.011 | 0.196 ± 0.056 |
+| GCN | 0.983 ± 0.007 | 0.452 ± 0.220 | 0.955 ± 0.015 | 0.367 ± 0.167 |
+| GraphSAGE | 0.981 ± 0.007 | 0.463 ± 0.260 | 0.952 ± 0.018 | 0.390 ± 0.162 |
+| GATv2 | 0.985 ± 0.006 | 0.369 ± 0.184 | 0.956 ± 0.014 | **0.404 ± 0.172** |
+
+Fold by fold on **case118 S2**, each GNN beat the *best* baseline of that fold (picked with hindsight, which flatters the baselines) in **3 of 5 folds**. In the other two, the DC rule won.
+
+**What this means (the honest headline):**
+- **Known outages (S1): LightGBM is best on both grids.** The GNNs come close (0.98 vs 0.996; 0.955 vs 0.964) but never beat it in any of the 10 folds. A graph model is not needed when every outage was seen in training.
+- **Unseen outages on the 118-bus grid (S2): GNNs have the highest average** (0.37-0.40 vs 0.30 for the best baseline, about 5× the 0.08 base rate). But the spread is large (± 0.17), and they win in only 3 of 5 folds. This is **promising evidence, not proof.**
+- **Unseen outages on the 30-bus grid: no clear winner.** Every model swings wildly between folds (std 0.2-0.3). The DC rule has the best average. With only 7-8 outages per fold, this grid is too small to judge generalisation.
+- **Recall on unseen outages is unreliable** (± 0.17-0.40). The threshold chosen on validation outages often does not suit new outages.
+- The seed-0 first look overstated the GNN advantage on case118 S2 (0.40-0.47 vs 0.27). Running 5 seeds is exactly what caught that.
+
 ---
 
 ## 7. Limitations: what we can NOT claim
@@ -386,7 +411,8 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 13. **One model scored 0.995-0.997. Wasn't that leakage?** I treated it as leakage until checked. Shuffled labels gave chance level (0.106-0.120 vs a 0.112 base rate), and feature importance pointed to physically sensible features. The task on known outages is just easy. That is why I also test on unseen outages.
 14. **Why do classic models fail on unseen outages?** They see the outage as a one-hot column. If that column was never 1 in training, the model learned nothing about it. A graph model instead sees the outage as a change in a structure it knows.
 15. **Why can a GNN handle an outage it never saw?** Weight sharing. The same message function runs at every bus and every branch. What it learns about how power reroutes around a missing branch in one part of the grid applies anywhere else. A flat model has separate weights for each input column, so nothing transfers.
-16. **Did the GNN beat the baselines?** *(Seed 0 so far; the 5-seed answer comes on Step 6.)* Only where it should: on unseen outages in the 118-bus grid, it led on both held-out outage folds (PR-AUC 0.40-0.47 vs at most 0.27 on test). On known outages it matched LightGBM (0.99 vs 0.997 on case30) but did not beat it. On the small 30-bus grid, results flipped between folds, because each fold has only 7-8 outages.
+16. **Did the GNN beat the baselines?** Partly. Over 5 seeds, on unseen outages in the 118-bus grid, the GNNs had the best average PR-AUC (0.37-0.40 vs 0.30 for the best baseline, base rate 0.08), but with high variance, and they won in only 3 of 5 outage folds. On known outages, LightGBM was best (0.964 vs 0.955 on case118). On the small 30-bus grid, no model was reliably better. My honest summary: GNNs help most where they should, on new outages in a bigger grid, but the evidence is moderate, not conclusive.
+19. **Why run 5 seeds?** One run depends on luck: which samples and which outages land in the test set, and the random starting weights. With one seed, the GNN looked clearly better on unseen case118 outages (0.40-0.47 vs 0.27). Over 5 seeds the advantage shrank and the spread was large. Reporting mean ± std stops me from claiming a lucky result.
 17. **Why did you change your test split halfway?** I looked at what one test fold contained and saw that only 1 of its 7 outages was ever insecure, so the score measured one outage. I switched to 5 rotating, balanced outage folds, so every outage is tested exactly once, and re-ran every model. I logged the change and the reason (decision D20). The change was the same for all models.
 18. **Your recall on unseen outages is low. Is the model useless there?** The ranking is useful (PR-AUC is 3-5× the base rate on case118), but the threshold tuned on validation outages does not transfer well to new outages. In screening, you would pick a lower threshold and accept more false alarms, because missing an insecure case is the expensive error.
 
@@ -394,5 +420,5 @@ Because single S2 folds are noisy, here is also the **validation** PR-AUC on S2 
 
 ## 9. Resume bullet (draft, rewritten at the end from real results)
 
-> *Placeholder until real results exist. No numbers yet.*
-> GNN-based N-1 contingency screening (static security assessment) on IEEE 30/118-bus grids: built a pandapower pipeline generating labelled (operating point, outage) samples; compared GCN/GraphSAGE/GAT against rule-based and classic ML baselines with leakage-safe splits.
+> *Draft from the 5-seed results; finalised after Step 7.*
+> **GNN-based N-1 Contingency Screening (Static Security Assessment)**: Built a pandapower pipeline generating 32k labelled (operating point, line-outage) samples on IEEE 30/118-bus grids (AC power flow, voltage and thermal limits). Benchmarked GCN/GraphSAGE/GAT against rule-based, DC power-flow and classic ML baselines (LR, LightGBM, MLP) with leakage-safe grouped splits over 5 seeds. On unseen outages in the 118-bus grid, GNNs reached 0.37-0.40 PR-AUC vs 0.30 for the best baseline (base rate 0.08), but with high variance; on known outages LightGBM remained best (0.964 PR-AUC).
