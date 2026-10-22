@@ -157,7 +157,7 @@ More terms are added at the step where we first use them.
 
 ### Step 9: reproducibility check and resume bullet
 
-- **Cloned the repository fresh from GitHub and re-ran the pipeline from scratch.** All 39 tests passed, the grid facts matched, and the case30 data label hash matched (`42676ea248`). The case118 check (12 min) is still running at the time of this commit. *Why:* "reproducible" means someone else can get the same data from the repo alone.
+- **Cloned the repository fresh from GitHub and re-ran the pipeline from scratch.** All 39 tests passed, the grid facts matched, and the case30 data label hash matched (`42676ea248`). The case118 data matched too (hash `97790e93b9`, 21,240 samples, 9.1% insecure), and the split sizes were identical. *Why:* "reproducible" means someone else can get the same data from the repo alone.
 - **Wrote the resume bullet** using only the 5-seed and ablation numbers, including the weaknesses.
 
 ---
