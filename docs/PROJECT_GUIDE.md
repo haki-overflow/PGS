@@ -1,6 +1,6 @@
 # Project Guide: GNN-based N-1 Contingency Screening
 
-A beginner-friendly guide to this project. It is updated after every step.
+A beginner-friendly guide to this project, written as it was built (Steps 1-9).
 Numbers in this guide come only from real runs. Each one says which run produced it.
 
 ---
@@ -11,7 +11,7 @@ Numbers in this guide come only from real runs. Each one says which run produced
 2. Grid operators must check that if any **one** branch fails, the grid still stays within its safe limits. This check is called **N-1 contingency screening**.
 3. The exact check needs one power-flow calculation per possible failure, which is slow for big grids and many scenarios.
 4. We generate thousands of synthetic scenarios on IEEE test grids with pandapower, label each (scenario, failure) pair as **secure** or **insecure**, and train graph neural networks (GNNs) to predict that label.
-5. We compare GNNs against simple rules and classic ML, with leakage-safe splits and 5 seeds, and report honestly where they do and do not help.
+5. We compare GNNs against simple rules and classic ML, with leakage-safe splits and 5 seeds. **Result:** on outages seen in training, LightGBM is best. On *new* outages in the 118-bus grid, the GNNs score best on average but with high variance, and ablations show the gain does not come from the grid topology.
 
 **What this is NOT:** it is not dynamic or transient *stability* (how the grid swings in the seconds after a fault). It is **static security**: the steady state after the failure.
 
@@ -77,6 +77,7 @@ Each term has a one-line analogy.
 | **Epoch** | One full pass over the training data. | Reading the whole textbook once. |
 | **Early stopping** | Stop training when the validation score has not improved for 8 epochs, and keep the best version. Prevents memorising the training set (overfitting). | Stop studying when mock-exam scores stop rising. |
 | **Seed** | The number that fixes all randomness (split, initial weights, batch order). Different seeds = different, equally valid runs. | Shuffling a deck with a recorded shuffle. |
+| **Ablation** | Remove one part of a model and re-train. If the score does not drop, that part was not what made it work. | Taking one ingredient out of a recipe to see if anyone notices. |
 | **Mean ± std over seeds** | Average over 5 seeds, ± their standard deviation. It shows how much a result depends on luck. | Five test attempts: your average and how much it varies. |
 
 More terms are added at the step where we first use them.
@@ -135,6 +136,29 @@ More terms are added at the step where we first use them.
 - **Built three GNNs with one shared skeleton** (`pgs/models.py`, D19). GCN and GraphSAGE see bus features and topology. GATv2 additionally reads branch features (impedance, rating, pre-outage flow) when deciding how much to listen to each neighbour. *Why:* these are the three standard GNN families. Same skeleton = fair comparison between them.
 - **Trained with class-weighted loss and early stopping on validation PR-AUC** (D18). *Why:* the weighting stops the model ignoring the rare insecure class. Early stopping stops it memorising the training set.
 - **Seed 0 only, as a working check.** The 5-seed comparison is Step 6.
+
+### Step 6: run every model 5 times
+
+- **Ran every model with seeds 0-4** on both grids and both splits: 200 runs (`scripts/step6_train_all_models_5_seeds.sh`). *Why:* one run depends on luck (which samples and outages land in the test set, and the random starting weights). Mean ± std over 5 seeds shows how much of a result is luck.
+- **For S2, the 5 seeds rotate through the 5 outage folds**, so every outage is tested exactly once.
+- **Compared fold by fold, not only on averages.** *Why:* with a large spread, "higher average" can hide "wins only some of the time". This is what showed the GNN lead on unseen case118 outages holds in 3 of 5 folds, not all.
+- **Outcome:** the seed-0 first look had overstated the GNN advantage. The 5-seed result is weaker and is the one we report.
+
+### Step 7: ablations and sanity checks
+
+- **Took the best GNN on validation (GAT) and removed one part at a time** on unseen case118 outages: all grid connections, branch features, depth (1 or 5 layers). *Why:* if removing a part does not lower the score, that part is not what makes the model work. This is called an **ablation**.
+- **Repeated the shuffled-label leakage check** with 5 seeds.
+- **Outcome:** nothing removed made a measurable difference, not even the grid connections. So we do not claim the GNN "learned the grid". The leakage check passed (D21).
+
+### Step 8: write-up
+
+- **Rewrote the README** as a finished project page: question, label, results table, findings, limitations, layout, how to run. *Why:* it is the first thing a recruiter or interviewer sees.
+- **Re-checked every number against the result files.** One overstated sentence ("GNNs never beat LightGBM on known outages") was wrong. They did in 3 of 30 per-fold comparisons, so it was corrected.
+
+### Step 9: reproducibility check and resume bullet
+
+- **Cloned the repository fresh from GitHub and re-ran the pipeline from scratch.** All 39 tests passed, the grid facts matched, and the case30 data label hash matched (`42676ea248`). The case118 check (12 min) is still running at the time of this commit. *Why:* "reproducible" means someone else can get the same data from the repo alone.
+- **Wrote the resume bullet** using only the 5-seed and ablation numbers, including the weaknesses.
 
 ---
 
@@ -225,7 +249,7 @@ Ten samples, 2 insecure (base rate 0.2). Model scores: 0.9, 0.8, 0.3, 0.2, 0.1, 
 
 ---
 
-## 6. Results so far
+## 6. Results
 
 ### Step 1: grid inspection (container run, 21/10)
 
@@ -445,7 +469,18 @@ Fold by fold, the variants swing far more between folds (e.g. full GAT 0.21 to 0
 
 ---
 
-## 9. Resume bullet (draft, rewritten at the end from real results)
+## 9. Resume bullet (from the 5-seed results)
 
-> *Draft after Step 7; finalised in Step 9.*
-> **GNN-based N-1 Contingency Screening (Static Security Assessment)**: Built a pandapower pipeline generating 32k labelled (operating point, line-outage) samples on IEEE 30/118-bus grids (AC power flow, voltage and thermal limits). Benchmarked GCN/GraphSAGE/GAT against rule-based, DC power-flow and classic ML baselines (LR, LightGBM, MLP) with leakage-safe grouped splits over 5 seeds. GNNs led on unseen outages in the 118-bus grid (0.37-0.40 vs 0.30 PR-AUC, base rate 0.08) but with high variance; ablations showed grid topology did not drive the gain; LightGBM remained best on known outages (0.964).
+**Title line:** GNN-based N-1 Contingency Screening (Static Security Assessment), PyTorch Geometric, pandapower
+
+**Bullets (pick 2-3):**
+- Built a pandapower pipeline generating 32k labelled (operating point, line-outage) samples on IEEE 30/118-bus grids using AC power flow with voltage and thermal limits; leakage-safe splits grouped by operating point and by outage, 39 unit tests.
+- Benchmarked GCN, GraphSAGE and GAT against DC power-flow rules, logistic regression, LightGBM and an MLP over 5 seeds; on unseen outages in the 118-bus grid, GNNs reached 0.37-0.40 PR-AUC vs 0.30 for the best baseline (base rate 0.08), with high fold-to-fold variance.
+- Ran ablations and shuffled-label checks showing the GNN gain did not come from grid topology, and that LightGBM remained best on previously seen outages (0.964 PR-AUC).
+
+**Rules for using it:**
+- Say "static security", never "stability".
+- Keep the variance caveat; never quote the seed-0 numbers (0.40-0.47).
+- Never claim the GNN "learned the grid structure" or that it is "faster than power flow".
+- Remove "(in progress)" from the old resume line; this project is finished.
+- Be ready to explain any number above. Each one is in Section 6 with the run that produced it.
