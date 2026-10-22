@@ -36,10 +36,11 @@ Reference output for each step's command: [`docs/EXPECTED_OUTPUT.md`](docs/EXPEC
 
 ## Status
 
-Step 6 of 9 done (5-seed results in `results/main_table.md`). Results: see the guide, Section 6.
+Step 7 of 9 done (5-seed results in `results/main_table.md`, ablations in `results/ablations.md`). Results: see the guide, Section 6.
 
 ## Tools
 
 Code, tests and documentation were written by an AI assistant (Claude Code) under my
-direction. I chose the scope and label definition, ran every experiment on my machine,
-checked the outputs, and reviewed the design decisions recorded in the guide.
+direction, and the AI also ran the experiments, on CPU in a cloud container. I chose the
+scope and the label definition, reviewed the design decisions recorded in the guide, and
+checked the results.

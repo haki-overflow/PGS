@@ -133,5 +133,7 @@ GNNs beat every Step 4 baseline row (best 0.274); on S1 they land near LightGBM.
 
 ## Steps 6-7
 
-No reference output yet: these runs (5 seeds × all models, then ablations) are meant for your
-GPU. Paste the final tables (`python -m pgs.summarize_results` prints them) and they go into the guide.
+These were run in the development container (CPU, several hours); see `results/main_table.md`
+and `results/ablations.md`. Re-running them locally should give similar means. Neural models
+will differ slightly per seed. Step 7's shuffled-label rows must stay near the base rate
+(LightGBM about 0.08 on case118 S2).

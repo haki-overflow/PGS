@@ -221,6 +221,7 @@ Ten samples, 2 insecure (base rate 0.2). Model scores: 0.9, 0.8, 0.3, 0.2, 0.1, 
 | D18 | **Training setup for MLP and GNNs:** cross-entropy loss with the insecure class up-weighted by (#secure / #insecure) in training; Adam, learning rate 1e-3; batch 128 graphs (256 for the MLP); at most 60 epochs; stop after 8 epochs without validation PR-AUC improvement and keep the best epoch. | Up-weighting handles the class imbalance without throwing data away. The epoch cap keeps the 5-seed sweep affordable. It was set from timing (2-30 s per epoch on CPU), before any GNN result. | Oversampling insecure samples; focal loss; longer training. |
 | D19 | **GNN shape:** linear encoder → 3 message-passing layers (64 units, residual connection + layer norm) → mean + max pooling → 2-layer head. Same for GCN, GraphSAGE and GATv2 (4 attention heads). | One shared skeleton, so differences come from the layer type. 3 layers = information travels 3 buses away. Max pooling matches the label, which is "any single violation". | Deeper models (tested as an ablation on Step 7); attention pooling. |
 | D20 | **S2 outages rotate through 5 stratified folds (changed on Step 5).** Outages are sorted by how often they are insecure and dealt round-robin into 5 fixed folds. Seed *s* tests fold *s*, validates on fold *s*+1, trains on the rest. All models were re-run on the new S2. | **Why the change, honestly:** after the first GNN runs I inspected the case30 S2 seed-0 test set and found that only 1 of its 7 outages was ever insecure, so its score measured a single outage (which the DC rule happened to catch). I had flagged this risk on Step 3. Rotation tests every outage exactly once over the 5 seeds, and stratification gives each fold a mix of dangerous and harmless outages. The change treats all models identically and uses labels only to balance folds, never to train. | Keep random 60/20/20 per seed (a noisy, partial test); leave-one-outage-out (38-177 folds, too expensive). |
+| D21 | **Step 7 ablations run on case118 unseen outages (S2) only**, with GAT (chosen on validation), 5 seeds; the shuffled-label check also runs once on known operating points. | S2 is where the GNNs led, so that is what needs explaining. Running every ablation on both splits would take 8+ hours on this CPU. | All ablations on both splits; ablations on all three GNNs. |
 
 ---
 
@@ -373,6 +374,28 @@ Fold by fold on **case118 S2**, each GNN beat the *best* baseline of that fold (
 - **Recall on unseen outages is unreliable** (± 0.17-0.40). The threshold chosen on validation outages often does not suit new outages.
 - The seed-0 first look overstated the GNN advantage on case118 S2 (0.40-0.47 vs 0.27). Running 5 seeds is exactly what caught that.
 
+### Step 7: ablations and sanity checks (container run, CPU, 22/10)
+
+All on **case118, unseen outages (S2)**, 5 seeds, using GAT (the GNN with the best *validation* score). Full table: `results/ablations.md`. Test PR-AUC, mean ± std (base rate 0.080).
+
+| Variant | What was removed or changed | PR-AUC |
+|---|---|---|
+| Full GAT (Step 6) | nothing | 0.404 ± 0.172 |
+| No topology | every grid connection removed: buses cannot exchange messages | 0.388 ± 0.120 |
+| No branch features | GAT ignores impedance, rating and flow on lines | 0.431 ± 0.190 |
+| 1 layer | information travels 1 bus instead of 3 | 0.412 ± 0.254 |
+| 5 layers | information travels 5 buses | 0.402 ± 0.204 |
+| **Shuffled labels**, GAT | trained on random labels | 0.131 ± 0.017 |
+| **Shuffled labels**, LightGBM | trained on random labels | 0.088 ± 0.020 |
+
+Fold by fold, the variants swing far more between folds (e.g. full GAT 0.21 to 0.68) than between each other. "No topology" beat full GAT in 2 of 5 folds.
+
+**What this means (important, and honest):**
+- **No ablation made a measurable difference.** Removing the grid connections entirely gave about the same score. So **the GNNs' lead on unseen case118 outages does *not* come from message passing over the grid topology.** The likely source is the architecture itself. It applies one shared small network to every bus, pools with mean + max, and reads the outage features (the tripped line's flow and loading on its end buses). That generalises to new outages better than the flat models' one-big-vector input. We did not prove this explanation; it is our best reading.
+- **We can therefore NOT claim "the GNN learned the grid structure".** We can claim: "a bus-level shared-weight model beat flat baselines on unseen outages on average, but grid topology did not measurably contribute".
+- **Leakage check passed.** Shuffled-label LightGBM sits at the base rate. Shuffled GAT is slightly above it (0.13). That is not leakage: a single input number with no learning at all, the tripped line's pre-outage loading, already scores 0.207 on the same folds. A network trained on noise can still produce scores that loosely follow such inputs. On known operating points, shuffled GAT scored 0.054 vs base 0.086 (1 seed).
+- **A single input feature is a strong baseline on unseen outages:** tripped-line loading alone scores 0.207 ± 0.076, close to LR and LightGBM (0.23-0.24).
+
 ---
 
 ## 7. Limitations: what we can NOT claim
@@ -386,6 +409,8 @@ Fold by fold on **case118 S2**, each GNN beat the *best* baseline of that fold (
 - **Load factor range is effectively 0.7-1.1.** Points with higher load were already insecure before any outage, so they were discarded (D7). The model has not seen heavier loading.
 - **Thresholds do not transfer to unseen outages.** On S2, recall at the validation-tuned threshold was 0.00-0.43 even when PR-AUC was good. Any deployment would need its threshold set for the desired recall.
 - **The S2 split was changed after looking at one test fold's contents** (D20). The change was model-agnostic and logged, but it is still a protocol change made after seeing early results.
+- **The GNN advantage is not explained by topology.** Removing all grid connections did not measurably lower GAT's score on unseen outages (0.388 vs 0.404). We cannot claim the model learned grid structure.
+- **Ablations used one GNN (GAT) and one split (case118 S2).**
 - **No speed claim.** GNN inference was fast (under 0.1 ms per sample, batched, CPU), but we did not benchmark it against an optimised power-flow solver.
 
 ---
@@ -413,6 +438,8 @@ Fold by fold on **case118 S2**, each GNN beat the *best* baseline of that fold (
 15. **Why can a GNN handle an outage it never saw?** Weight sharing. The same message function runs at every bus and every branch. What it learns about how power reroutes around a missing branch in one part of the grid applies anywhere else. A flat model has separate weights for each input column, so nothing transfers.
 16. **Did the GNN beat the baselines?** Partly. Over 5 seeds, on unseen outages in the 118-bus grid, the GNNs had the best average PR-AUC (0.37-0.40 vs 0.30 for the best baseline, base rate 0.08), but with high variance, and they won in only 3 of 5 outage folds. On known outages, LightGBM was best (0.964 vs 0.955 on case118). On the small 30-bus grid, no model was reliably better. My honest summary: GNNs help most where they should, on new outages in a bigger grid, but the evidence is moderate, not conclusive.
 19. **Why run 5 seeds?** One run depends on luck: which samples and which outages land in the test set, and the random starting weights. With one seed, the GNN looked clearly better on unseen case118 outages (0.40-0.47 vs 0.27). Over 5 seeds the advantage shrank and the spread was large. Reporting mean ± std stops me from claiming a lucky result.
+20. **What did your ablations show?** That nothing I removed mattered measurably, including the grid connections themselves. That was a surprise. It means the GNN's edge on unseen outages comes from its shared per-bus design and the outage features, not from passing messages along the grid. I report that instead of claiming the model "understands the grid".
+21. **Your shuffled-label GNN scored above chance. Isn't that leakage?** LightGBM with shuffled labels sat at chance (0.088 vs 0.080). The GNN's 0.13 is below what one raw input, the tripped line's loading, scores with no learning at all (0.207). So the network's output loosely follows its inputs even when trained on noise. That is not label information leaking.
 17. **Why did you change your test split halfway?** I looked at what one test fold contained and saw that only 1 of its 7 outages was ever insecure, so the score measured one outage. I switched to 5 rotating, balanced outage folds, so every outage is tested exactly once, and re-ran every model. I logged the change and the reason (decision D20). The change was the same for all models.
 18. **Your recall on unseen outages is low. Is the model useless there?** The ranking is useful (PR-AUC is 3-5× the base rate on case118), but the threshold tuned on validation outages does not transfer well to new outages. In screening, you would pick a lower threshold and accept more false alarms, because missing an insecure case is the expensive error.
 
@@ -420,5 +447,5 @@ Fold by fold on **case118 S2**, each GNN beat the *best* baseline of that fold (
 
 ## 9. Resume bullet (draft, rewritten at the end from real results)
 
-> *Draft from the 5-seed results; finalised after Step 7.*
-> **GNN-based N-1 Contingency Screening (Static Security Assessment)**: Built a pandapower pipeline generating 32k labelled (operating point, line-outage) samples on IEEE 30/118-bus grids (AC power flow, voltage and thermal limits). Benchmarked GCN/GraphSAGE/GAT against rule-based, DC power-flow and classic ML baselines (LR, LightGBM, MLP) with leakage-safe grouped splits over 5 seeds. On unseen outages in the 118-bus grid, GNNs reached 0.37-0.40 PR-AUC vs 0.30 for the best baseline (base rate 0.08), but with high variance; on known outages LightGBM remained best (0.964 PR-AUC).
+> *Draft after Step 7; finalised in Step 9.*
+> **GNN-based N-1 Contingency Screening (Static Security Assessment)**: Built a pandapower pipeline generating 32k labelled (operating point, line-outage) samples on IEEE 30/118-bus grids (AC power flow, voltage and thermal limits). Benchmarked GCN/GraphSAGE/GAT against rule-based, DC power-flow and classic ML baselines (LR, LightGBM, MLP) with leakage-safe grouped splits over 5 seeds. GNNs led on unseen outages in the 118-bus grid (0.37-0.40 vs 0.30 PR-AUC, base rate 0.08) but with high variance; ablations showed grid topology did not drive the gain; LightGBM remained best on known outages (0.964).
